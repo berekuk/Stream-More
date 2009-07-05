@@ -1,0 +1,5 @@
+libstream-more-perl (0.4.0) unstable; urgency=low
+
+  * Separated from core stream sources
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Sun, 05 Jul 2009 18:58:46 +0400
