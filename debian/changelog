@@ -1,3 +1,12 @@
+libstream-more-perl (0.4.1) unstable; urgency=low
+
+  * Stream::Out::Multiplex implemented
+  * Stream::Seq removed, all PPB::Join modules support stream api now
+  * pod tests
+  * $VERSION in all modules
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Wed, 02 Sep 2009 03:02:07 +0400
+
 libstream-more-perl (0.4.0) unstable; urgency=low
 
   * Separated from core stream sources

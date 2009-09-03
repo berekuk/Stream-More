@@ -3,6 +3,8 @@ package Stream::Simple;
 use strict;
 use warnings;
 
+use Yandex::Version '{{DEBIAN_VERSION}}';
+
 =head1 NAME
 
 Stream::Simple - simple procedural-style constructors of streams without any positions

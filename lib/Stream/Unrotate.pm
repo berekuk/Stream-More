@@ -3,6 +3,8 @@ package Stream::Unrotate;
 use strict;
 use warnings;
 
+use Yandex::Version '{{DEBIAN_VERSION}}';
+
 =head1 NAME
 
 Stream::Unrotate - simple wrapper for Yandex::Unrotate
