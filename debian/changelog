@@ -1,3 +1,9 @@
+libstream-more-perl (0.4.3) unstable; urgency=low
+
+  * Stream::Queue implemented
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 27 Oct 2009 03:27:42 +0300
+
 libstream-more-perl (0.4.2) unstable; urgency=low
 
   * two experimental modules:

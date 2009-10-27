@@ -15,10 +15,6 @@ use Yandex::Unrotate;
 use base qw(Yandex::Unrotate);
 use base qw(Stream::Stream);
 
-sub read {
-    return shift->readline;
-}
-
 =head1 SEE ALSO
 
 If should consider Stream::Log->new($logfile)->stream($posfile) instead, if you want to get all Catalog benefits.
