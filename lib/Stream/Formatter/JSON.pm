@@ -3,6 +3,12 @@ package Stream::Formatter::JSON;
 use strict;
 use warnings;
 
+=head1 NAME
+
+Stream::Formatter::JSON - JSON formatter
+
+=cut
+
 use JSON;
 use Stream::Formatter 0.6.0;
 use base qw(Stream::Formatter);

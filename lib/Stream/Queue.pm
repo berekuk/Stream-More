@@ -36,6 +36,8 @@ C<Stream::Queue> and C<Stream::Queue::In> implement local file-based FIFO queue 
 
 =cut
 
+use Yandex::Version '{{DEBIAN_VERSION}}';
+
 use Yandex::Logger;
 
 use base qw(Stream::Storage);
@@ -74,7 +76,9 @@ sub new {
     unless (-d "$self->{dir}/clients") {
         mkdir "$self->{dir}/clients" or croak "Can't create dir $self->{dir}/clients: $!";
     }
-    return bless $self => $class;
+    $self = bless $self => $class;
+    $self->clean; # in case there's no clients registered, this can be useful
+    return $self;
 }
 
 =item B<< format() >>
@@ -212,6 +216,14 @@ sub clean {
         else {
             $done_ids = $client_done_ids;
         }
+    }
+    unless ($done_ids) {
+        my $status = Yandex::Persistent->new("$self->{dir}/meta"); # just locking to make sure that nobody commits anything
+        for my $chunk (glob "$self->{dir}/*.chunk") {
+            unlink $chunk or croak "Can't unlink '$chunk': $!";
+        }
+        INFO "$self->{dir}: no clients registered, all chunks removed";
+        return;
     }
     unless ($done_ids->size) {
         DEBUG "Nothing to clean";

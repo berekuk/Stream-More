@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 14;
+use Test::More tests => 16;
 use PPB::Test::Logger;
 
 use lib 'lib';
@@ -75,4 +75,10 @@ undef $reader2;
 is_deeply( [ glob("tfiles/*.chunk") ], [ 'tfiles/2.chunk', 'tfiles/3.chunk' ], 'first chunk removed, second still remains');
 
 $queue->clean;
+is_deeply( [ glob("tfiles/*.chunk") ], [ 'tfiles/2.chunk', 'tfiles/3.chunk' ], 'two chunks remain after clean');
+
+$queue->unregister_client('client1');
+$queue->unregister_client('client2');
+$queue->clean;
+is_deeply( [ glob("tfiles/*.chunk") ], [], 'all chunks removed when no clients registered');
 
