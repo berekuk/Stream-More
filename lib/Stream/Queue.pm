@@ -42,7 +42,7 @@ use base qw(Stream::Storage);
 
 use Params::Validate;
 use File::Temp;
-use File::Path qw(remove_tree);
+use File::Path qw(rmtree);
 use File::Spec;
 use Set::Object;
 use IO::Handle;
@@ -170,7 +170,7 @@ sub unregister_client {
         WARN "No such client '$client', can't unregister";
         return;
     }
-    remove_tree("$self->{dir}/clients/$client");
+    rmtree("$self->{dir}/clients/$client");
 }
 
 =item B<< has_client($client_name) >>

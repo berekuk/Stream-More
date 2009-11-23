@@ -1,3 +1,10 @@
+libstream-more-perl (0.4.4) UNRELEASED; urgency=low
+
+  * Stream::Queue is fixed to be at least hardy-compatible
+  * Stream::Formatter::JSON implemented
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Mon, 23 Nov 2009 05:05:22 +0300
+
 libstream-more-perl (0.4.3) unstable; urgency=low
 
   * Stream::Queue implemented
