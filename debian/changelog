@@ -1,3 +1,15 @@
+libstream-more-perl (0.4.6) UNRELEASED; urgency=low
+
+  * Stream::Formatter::CSV: die when no columns specified
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 24 Nov 2009 21:59:12 +0300
+
+libstream-more-perl (0.4.5) unstable; urgency=low
+
+  * Stream::Formatter::CSV formatter (not really CSV...)
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 24 Nov 2009 21:55:01 +0300
+
 libstream-more-perl (0.4.4) unstable; urgency=low
 
   * Stream::Queue is fixed to be at least hardy-compatible
