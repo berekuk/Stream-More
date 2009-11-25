@@ -1,8 +1,9 @@
-libstream-more-perl (0.4.6) UNRELEASED; urgency=low
+libstream-more-perl (0.4.6) unstable; urgency=low
 
   * Stream::Formatter::CSV: die when no columns specified
+  * Strem::Formatter::JSON: using JSON::XS instead of broken JSON
 
- -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 24 Nov 2009 21:59:12 +0300
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Wed, 25 Nov 2009 21:10:21 +0300
 
 libstream-more-perl (0.4.5) unstable; urgency=low
 
