@@ -210,6 +210,10 @@ sub clean_ids {
     my $status = $self->_status;
     for (@ids) {
         delete $status->{pos}{$_};
+        my $lockfile = $self->_id2lock($_);
+        if (-e $lockfile) {
+            unlink $lockfile or warn "Can't remove old lock file: $!";
+        }
     }
 }
 
