@@ -1,3 +1,9 @@
+libstream-more-perl (0.4.8) unstable; urgency=low
+
+  * Stream::Out::Any implemented
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Thu, 04 Feb 2010 20:18:22 +0300
+
 libstream-more-perl (0.4.7) unstable; urgency=low
 
   * Stream::Queue: clean method removes lock files from client dirs too
