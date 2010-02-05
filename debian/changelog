@@ -1,3 +1,9 @@
+libstream-more-perl (0.5.0) unstable; urgency=low
+
+  * Stream::Filter::Subfilter implemented
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Fri, 05 Feb 2010 21:03:56 +0300
+
 libstream-more-perl (0.4.8) unstable; urgency=low
 
   * Stream::Out::Any implemented
