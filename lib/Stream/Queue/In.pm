@@ -107,7 +107,9 @@ sub read {
     unless ($self->{fh}) {
         my $status = $self->_status;
 
+        # TODO - keep buffer of next chunks, just in case there are a LOT of chunks and glob() call is too expensive
         my @chunk_files = glob $self->{storage}->dir."/*.chunk";
+
         @chunk_files =
             map { $_->[1] }
             sort { $a->[0] <=> $b->[0] }
