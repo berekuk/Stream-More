@@ -27,7 +27,7 @@ use Carp;
 use Storable qw(fd_retrieve);
 use IO::Handle;
 use File::Spec;
-use Yandex::Persistent;
+use Yandex::Persistent 1.2.1;
 use Yandex::Logger;
 use Yandex::X;
 use Yandex::Lockf;
@@ -56,7 +56,7 @@ sub new {
 
 sub _status {
     my $self = shift;
-    return Yandex::Persistent->new("$self->{dir}/status");
+    return Yandex::Persistent->new("$self->{dir}/status", { format => 'json' });
 }
 
 sub _id2lock {
@@ -86,6 +86,51 @@ sub _chunk2id {
     return $id;
 }
 
+sub _next_chunk {
+    my $self = shift;
+
+    my $status = $self->_status;
+
+    # TODO - keep buffer of next chunks, just in case there are a LOT of chunks and glob() call is too expensive
+    my @chunk_files = glob $self->{storage}->dir."/*.chunk";
+
+    @chunk_files =
+        map { $_->[1] }
+        sort { $a->[0] <=> $b->[0] }
+        map { [ $self->_chunk2id($_), $_ ] }
+        @chunk_files; # resort by ids
+
+    my @filtered_chunk_files;
+    for (@chunk_files) {
+        my $id = $self->_chunk2id($_);
+        if (defined $status->{pos}{$id} and $status->{pos}{$id} eq 'done') {
+            next; # chunk already processed in some other process
+        }
+        if ($self->{prev_ids}{$id}) {
+            next; # chunk already processing in this process
+        }
+        push @filtered_chunk_files, $_;
+    }
+    @chunk_files = @filtered_chunk_files;
+
+    my $lock = lockf_any([
+        map { $self->_id2lock($self->_chunk2id($_)) } @chunk_files
+    ], 1);
+    unless ($lock) {
+        # no chunks left
+        return;
+    }
+    my $id = $self->_lock2id($lock->name);
+    $self->{lock} = $lock;
+    my $chunk = $self->_id2chunk($id);
+    DEBUG "Reading $chunk";
+    $self->{fh} = xopen('<', $chunk);
+    if (my $pos = $status->{pos}{$id}) {
+        seek $self->{fh}, $pos, 0 or die "Can't seek to $pos in $chunk";
+    }
+    return 1;
+}
+
 =item C<< read() >>
 
 Read new item from queue.
@@ -105,45 +150,7 @@ sub read {
     }
 
     unless ($self->{fh}) {
-        my $status = $self->_status;
-
-        # TODO - keep buffer of next chunks, just in case there are a LOT of chunks and glob() call is too expensive
-        my @chunk_files = glob $self->{storage}->dir."/*.chunk";
-
-        @chunk_files =
-            map { $_->[1] }
-            sort { $a->[0] <=> $b->[0] }
-            map { [ $self->_chunk2id($_), $_ ] }
-            @chunk_files; # resort by ids
-
-        my @filtered_chunk_files;
-        for (@chunk_files) {
-            my $id = $self->_chunk2id($_);
-            if (defined $status->{pos}{$id} and $status->{pos}{$id} eq 'done') {
-                next; # chunk already processed in some other process
-            }
-            if ($self->{prev_ids}{$id}) {
-                next; # chunk already processing in this process
-            }
-            push @filtered_chunk_files, $_;
-        }
-        @chunk_files = @filtered_chunk_files;
-
-        my $lock = lockf_any([
-            map { $self->_id2lock($self->_chunk2id($_)) } @chunk_files
-        ], 1);
-        unless ($lock) {
-            # no chunks left
-            return;
-        }
-        my $id = $self->_lock2id($lock->name);
-        $self->{lock} = $lock;
-        my $chunk = $self->_id2chunk($id);
-        DEBUG "Reading $chunk";
-        $self->{fh} = xopen('<', $chunk);
-        if (my $pos = $status->{pos}{$id}) {
-            seek $self->{fh}, $pos, 0 or die "Can't seek to $pos in $chunk";
-        }
+        $self->_next_chunk or return;
     }
     my $item = fd_retrieve($self->{fh});
     unless ($item) {
