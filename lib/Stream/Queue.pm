@@ -58,12 +58,25 @@ use Stream::Queue::In;
 
 Constructor. C<$dir> must be writable and empty on first invocation.
 
+Options:
+
+=over
+
+=item I<autoregister>
+
+If true, automatically register client at first C<stream()> call.
+
+Default is true.
+
+=back
+
 =cut
 sub new {
     my $class = shift;
     my $self = validate(@_, {
         dir => 1,
         format => { default => 'storable' },
+        autoregister => { default => 1 },
     });
     unless ($self->{format} eq 'storable') {
         croak "Only 'storable' format is supported";
@@ -79,6 +92,11 @@ sub new {
     $self = bless $self => $class;
     $self->clean; # in case there's no clients registered, this can be useful
     return $self;
+}
+
+sub _meta {
+    my $self = shift;
+    return Yandex::Persistent->new("$self->{dir}/meta");
 }
 
 =item B<< format() >>
@@ -134,13 +152,14 @@ sub commit {
     $self->{tmp}->flush;
 
     my $new_chunk_name = do {
-        my $status = Yandex::Persistent->new("$self->{dir}/meta");
+        my $status = $self->_meta;
         $status->{id} ||= 0;
         $status->{id}++;
+        $status->commit;
         "$self->{dir}/$status->{id}.chunk";
     };
     INFO "Commiting $new_chunk_name";
-    rename($self->{tmp}->filename, $new_chunk_name) or die "Failed to commit chunk $self->{tmp}: $!";
+    rename($self->{tmp}->filename => $new_chunk_name) or die "Failed to commit chunk $self->{tmp}: $!";
     $self->{tmp}->unlink_on_destroy(0);
     delete $self->{tmp};
 }
@@ -155,6 +174,7 @@ Once registered, client must read queue regularly; otherwise queue will become o
 sub register_client {
     my $self = shift;
     my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
+    my $status = $self->_meta; # global lock
     if ($self->has_client($client)) {
         return; # already registered
     }
@@ -170,6 +190,7 @@ Unregister client named C<$client_name>.
 sub unregister_client {
     my $self = shift;
     my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
+    my $status = $self->_meta; # global lock
     unless ($self->has_client($client)) {
         WARN "No such client '$client', can't unregister";
         return;
@@ -217,18 +238,21 @@ sub clean {
             $done_ids = $client_done_ids;
         }
     }
+
     unless ($done_ids) {
-        my $status = Yandex::Persistent->new("$self->{dir}/meta"); # just locking to make sure that nobody commits anything
+        my $status = $self->_meta; # lock to make sure that nobody commits anything
         for my $chunk (glob "$self->{dir}/*.chunk") {
             unlink $chunk or croak "Can't unlink '$chunk': $!";
         }
         INFO "$self->{dir}: no clients registered, all chunks removed";
         return;
     }
+
     unless ($done_ids->size) {
         DEBUG "Nothing to clean";
         return;
     }
+
     INFO "Done ids: ".join(', ', $done_ids->elements);
     for ($done_ids->elements) {
         my $chunk = "$self->{dir}/$_.chunk";
@@ -248,12 +272,19 @@ sub stream {
     my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
 
     unless ($self->has_client($client)) {
-        $self->register_client($client); # TODO - optionally forbid automatic registration?
+        unless ($self->{autoregister}) {
+            croak "Client $client not found and autoregister is disabled";
+        }
+        $self->register_client($client);
     }
     return Stream::Queue::In->new({
         storage => $self,
         client => $client,
     });
+}
+
+sub class_caps {
+    { persistent => 1 }
 }
 
 =back

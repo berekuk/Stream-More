@@ -3,7 +3,8 @@
 use strict;
 use warnings;
 
-use Test::More tests => 16;
+use Test::More tests => 18;
+use Test::Exception;
 use PPB::Test::Logger;
 
 use lib 'lib';
@@ -81,4 +82,16 @@ $queue->unregister_client('client1');
 $queue->unregister_client('client2');
 $queue->clean;
 is_deeply( [ glob("tfiles/*.chunk") ], [], 'all chunks removed when no clients registered');
+
+$queue = Stream::Queue->new({
+    dir => 'tfiles',
+    autoregister => 0,
+});
+throws_ok(sub {
+    $queue->stream('abcd');
+}, qr/not found/, 'client() method fails when autoregister is disabled');
+$queue->register_client('abcd');
+lives_ok(sub {
+    $queue->stream('abcd');
+}, 'client() method works after explicit registering');
 
