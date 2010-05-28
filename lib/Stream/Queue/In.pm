@@ -27,10 +27,10 @@ use Carp;
 use Storable qw(fd_retrieve);
 use IO::Handle;
 use File::Spec;
-use Yandex::Persistent 1.2.1;
+use Yandex::Persistent 1.3.0;
 use Yandex::Logger;
 use Yandex::X;
-use Yandex::Lockf;
+use Yandex::Lockf 3.0.0;
 
 =item C<< new({ storage => $queue, client => $client }) >>
 
@@ -49,33 +49,45 @@ sub new {
         croak "$self->{client} is not registered at ".$self->{storage}->dir;
     }
     $self->{dir} = $self->{storage}->dir."/clients/$self->{client}";
-    $self->{prev_locks} = [];
-    $self->{prev_ids} = {};
-    return bless $self => $class;
+    $self->{prev_chunks} = {};
+    bless $self => $class;
+
+    if (-e "$self->{dir}/status") {
+        $self->_convert_from_old_status;
+    }
+    return $self;
+
 }
 
-sub _status {
+sub _convert_from_old_status {
     my $self = shift;
-    return Yandex::Persistent->new("$self->{dir}/status", { format => 'json' });
+    my $old_status = Yandex::Persistent->new("$self->{dir}/status", { auto_commit => 0 });
+    for my $id (keys %{ $old_status->{pos} }) {
+        my $pos = $old_status->{pos}{$id};
+        my $chunk_status = Yandex::Persistent->new("$self->{dir}/$id.status", { format => 'json', auto_commit => 0 });
+        $chunk_status->{pos} = $pos;
+        $chunk_status->commit;
+    }
+    xunlink($old_status);
+    undef $old_status; # status file will not be rewritten because auto_commit is disabled
+    xunlink("$old_status.lock");
 }
 
-sub _id2lock {
+=item C<< chunk_status($id) >>
+
+Get chunk info by id.
+
+Returns hashref C<< { id => $id, status => $persistent } >>.
+
+=cut
+sub chunk_status {
     my $self = shift;
     my ($id) = validate_pos(@_, 1);
-    return "$self->{dir}/$id.chunk_lock";
-}
-
-sub _lock2id {
-    my $self = shift;
-    my ($file) = validate_pos(@_, 1);
-    my ($id) = $file =~ /(\d+)\.chunk_lock$/ or die "Wrong lock file $file";
-    return $id;
-}
-
-sub _id2chunk {
-    my $self = shift;
-    my ($id) = validate_pos(@_, 1);
-    return $self->{storage}->dir."/$id.chunk";
+    my $status = Yandex::Persistent->new("$self->{dir}/$id.status", { format => 'json', auto_commit => 0 }, { blocking => 0 }) or return;
+    return {
+        id => $id,
+        status => $status,
+    };
 }
 
 sub _chunk2id {
@@ -89,8 +101,6 @@ sub _chunk2id {
 sub _next_chunk {
     my $self = shift;
 
-    my $status = $self->_status;
-
     # TODO - keep buffer of next chunks, just in case there are a LOT of chunks and glob() call is too expensive
     my @chunk_files = glob $self->{storage}->dir."/*.chunk";
 
@@ -100,42 +110,39 @@ sub _next_chunk {
         map { [ $self->_chunk2id($_), $_ ] }
         @chunk_files; # resort by ids
 
-    my @filtered_chunk_files;
-    for (@chunk_files) {
-        my $id = $self->_chunk2id($_);
-        if (defined $status->{pos}{$id} and $status->{pos}{$id} eq 'done') {
+    for my $chunk (@chunk_files) {
+        my $id = $self->_chunk2id($chunk);
+        my $chunk_status = $self->{storage}->chunk_status($id, { read_only => 1 });
+        my $client_chunk_status = $self->chunk_status($id) or next;
+
+        unless ($chunk_status->{size}) {
+            next; # chunk is empty
+        }
+        if ($client_chunk_status->{status}{pos} and $client_chunk_status->{status}{pos} >= $chunk_status->{size}) {
             next; # chunk already processed in some other process
         }
-        if ($self->{prev_ids}{$id}) {
+        if ($self->{prev_chunks}{$id}) {
             next; # chunk already processing in this process
         }
-        push @filtered_chunk_files, $_;
-    }
-    @chunk_files = @filtered_chunk_files;
 
-    my $lock = lockf_any([
-        map { $self->_id2lock($self->_chunk2id($_)) } @chunk_files
-    ], 1);
-    unless ($lock) {
-        # no chunks left
-        return;
+        DEBUG "[$self->{client}] Reading $chunk";
+        $self->{current_chunk} = $client_chunk_status;
+
+        $self->{fh} = xopen('<', $chunk);
+        if (my $pos = $client_chunk_status->{status}{pos}) {
+            seek $self->{fh}, $pos, 0 or die "Can't seek to $pos in $chunk";
+        }
+        return 1;
     }
-    my $id = $self->_lock2id($lock->name);
-    $self->{lock} = $lock;
-    my $chunk = $self->_id2chunk($id);
-    DEBUG "Reading $chunk";
-    $self->{fh} = xopen('<', $chunk);
-    if (my $pos = $status->{pos}{$id}) {
-        seek $self->{fh}, $pos, 0 or die "Can't seek to $pos in $chunk";
-    }
-    return 1;
+    # no chunks left
+    return;
 }
 
 =item C<< read() >>
 
 Read new item from queue.
 
-This method chooses next unlocked chunk and reads it from position saved from last invocation in persistent file C<$queue_dir/clients/$client_name/status>.
+This method chooses next unlocked chunk and reads it from position saved from last invocation in persistent file C<$queue_dir/clients/$client_name/$chunk_id.status>.
 
 =cut
 sub read {
@@ -143,9 +150,13 @@ sub read {
 
     if ($self->{fh} and $self->{fh}->eof) {
         # chunk is over, keep its lock (we don't want to commit yet) and switch to next chunk if possible
-        DEBUG "Chunk is over";
-        $self->{prev_ids}{ $self->_lock2id($self->{lock}->name) } = 1;
-        push @{$self->{prev_locks}}, delete $self->{lock};
+        DEBUG "[$self->{client}] Chunk is over";
+        my $pos = tell $self->{fh};
+        if ($pos < 0) {
+            die "tell failed";
+        }
+        $self->{current_chunk}{status}{pos} = $pos;
+        $self->{prev_chunks}{ delete $self->{current_chunk}{id} } = $self->{current_chunk};
         delete $self->{fh};
     }
 
@@ -162,53 +173,36 @@ sub read {
 
 =item C<< commit() >>
 
-Save positions from all read chunks in status file; cleanup queue.
+Save positions from all read chunks; cleanup queue.
 
 =cut
 sub commit {
     my $self = shift;
 
     INFO "Commiting $self->{dir}";
+    my @ids = keys %{ $self->{prev_chunks} };
 
-    my $status = $self->_status;
-    for my $lock (@{ $self->{prev_locks} }) {
-        my $id = $self->_lock2id($lock->name);
-        $status->{pos}{$id} = 'done';
+    for my $id (@ids) {
+        my $prev_chunk = $self->{prev_chunks}{$id};
+        $prev_chunk->{status}->commit;
     }
     if ($self->{fh}) {
-        my $id = $self->_lock2id($self->{lock}->name);
-        if ($self->{fh}->eof) {
-            $status->{pos}{$id} = 'done';
-        }
-        else {
-            $status->{pos}{$id} = tell $self->{fh};
-        }
+        my $id = $self->{current_chunk}{id};
+        $self->{current_chunk}{status}{pos} = tell $self->{fh};
+        $self->{current_chunk}{status}->commit;
     }
-    $status->commit;
-    $self->{prev_locks} = [];
-    $self->{prev_ids} = {};
+
+    $self->{prev_chunks} = {};
+    $self->{current_chunk} = {};
     delete $self->{fh};
-    delete $self->{lock};
-    undef $status;
-    $self->{storage}->clean;
-}
 
-=item C<< get_done_ids() >>
-
-Get ids of all completed chunks.
-
-You shouldn't call this method from anywhere except C<Stream::Queue>, which uses it for cleanup. API is still very unstable.
-
-=cut
-sub get_done_ids {
-    my $self = shift;
-    my $status = $self->_status;
-    return grep { $status->{pos}{$_} eq 'done' } keys %{ $status->{pos} };
+    $self->{storage}->clean_ids(@ids);
+    return;
 }
 
 =item C<< clean_ids(@ids) >>
 
-Remove all references to specified ids from status file.
+Remove all references to specified ids from client dir.
 
 You shouldn't call this method from anywhere except C<Stream::Queue>, which uses it for cleanup. API is still very unstable.
 
@@ -216,14 +210,46 @@ You shouldn't call this method from anywhere except C<Stream::Queue>, which uses
 sub clean_ids {
     my $self = shift;
     my @ids = @_;
-    my $status = $self->_status;
     for (@ids) {
-        delete $status->{pos}{$_};
-        my $lockfile = $self->_id2lock($_);
-        if (-e $lockfile) {
-            unlink $lockfile or warn "Can't remove old lock file: $!";
-        }
+        my $status = $self->chunk_status($_) or next;
+        DEBUG "[$self->{client}] Cleaning status for chunk $_";
+        $status->{status}->delete();
     }
+}
+
+=item C<< gc() >>
+
+Cleanup lost files.
+
+=cut
+sub gc {
+    my $self = shift;
+    opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";
+    while (my $file = readdir $dh) {
+        next if $file eq '.';
+        next if $file eq '..';
+        my $unlink = sub {
+            xunlink("$self->{dir}/$file");
+        };
+        my $id;
+        if (($id) = $file =~ /^(\d+)\.status\.lock$/) {
+            unless (-e "$self->{dir}/$id.status") {
+                $unlink->();
+                DEBUG "[$self->{client}] Lost lock file $file removed";
+            }
+            next;
+        }
+        elsif (($id) = $file =~ /^(\d+)\.status$/) {
+            unless (-e $self->{storage}->dir."/$id.chunk") {
+                $unlink->();
+                DEBUG "[$self->{client}] Lost file $file for $id chunk removed";
+            }
+            next; # TODO - remove files with old ids
+        }
+        $unlink->();
+        WARN "[$self->{client}] Unknown file $file removed";
+    }
+    closedir $dh or die "Can't close '$self->{dir}': $!";
 }
 
 =back

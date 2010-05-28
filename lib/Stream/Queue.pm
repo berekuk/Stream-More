@@ -50,7 +50,8 @@ use Set::Object;
 use IO::Handle;
 use Storable qw(store_fd fd_retrieve);
 use Carp;
-use Yandex::Persistent;
+use Yandex::Persistent 1.3.0;
+use Yandex::X 1.1.0;
 
 use Stream::Queue::In;
 
@@ -77,26 +78,28 @@ sub new {
         dir => 1,
         format => { default => 'storable' },
         autoregister => { default => 1 },
+        gc_period => { default => 300 },
     });
     unless ($self->{format} eq 'storable') {
         croak "Only 'storable' format is supported";
     }
+    $self->{dir} = File::Spec->rel2abs($self->{dir});
     # TODO - check that dir is writable
     # TODO - create dir?
     unless (-d $self->{dir}) {
-        mkdir $self->{dir} or croak "Can't create dir $self->{dir}: $!";
+        xmkdir($self->{dir});
     }
     unless (-d "$self->{dir}/clients") {
-        mkdir "$self->{dir}/clients" or croak "Can't create dir $self->{dir}/clients: $!";
+        xmkdir("$self->{dir}/clients");
     }
-    $self = bless $self => $class;
-    $self->clean; # in case there's no clients registered, this can be useful
+    bless $self => $class;
+    $self->try_gc;
     return $self;
 }
 
 sub _meta {
     my $self = shift;
-    return Yandex::Persistent->new("$self->{dir}/meta");
+    return Yandex::Persistent->new("$self->{dir}/meta", { auto_commit => 0 });
 }
 
 =item B<< format() >>
@@ -136,6 +139,15 @@ sub write($$) {
     store_fd(\$item, $self->{tmp}) or croak "Can't write to '$self->{filename}'";
 }
 
+sub _next_id {
+    my $self = shift;
+    my $status = $self->_meta;
+    $status->{id} ||= 0;
+    $status->{id}++;
+    $status->commit;
+    return $status->{id};
+}
+
 =item B<< commit() >>
 
 Commit temporary file with written items into queue.
@@ -151,17 +163,18 @@ sub commit {
     }
     $self->{tmp}->flush;
 
-    my $new_chunk_name = do {
-        my $status = $self->_meta;
-        $status->{id} ||= 0;
-        $status->{id}++;
-        $status->commit;
-        "$self->{dir}/$status->{id}.chunk";
-    };
+    my $new_id = $self->_next_id;
+
+    my $chunk_status = $self->chunk_status($new_id);
+    $chunk_status->{size} = $self->{tmp}->tell;
+
+    my $new_chunk_name = "$self->{dir}/$new_id.chunk";
     INFO "Commiting $new_chunk_name";
-    rename($self->{tmp}->filename => $new_chunk_name) or die "Failed to commit chunk $self->{tmp}: $!";
+    xrename($self->{tmp}->filename => $new_chunk_name);
     $self->{tmp}->unlink_on_destroy(0);
     delete $self->{tmp};
+
+    $chunk_status->commit;
 }
 
 =item B<< register_client($client_name) >>
@@ -179,7 +192,7 @@ sub register_client {
         return; # already registered
     }
     INFO "Registering $client at $self->{dir}";
-    mkdir "$self->{dir}/clients/$client" or croak "Can't create dir $self->{dir}/clients/$client: $!";
+    xmkdir("$self->{dir}/clients/$client");
 }
 
 =item B<< unregister_client($client_name) >>
@@ -218,52 +231,129 @@ sub _clients {
     return map { Stream::Queue::In->new({ storage => $self, client => $_ }) } @client_names;
 }
 
-=item B<< clean() >>
+sub _chunk_status_file {
+    my $self = shift;
+    my ($id) = validate_pos(@_, 1);
+    return "$self->{dir}/$id.status";
+}
 
-Remove all unused chunks and clean clients' statuses.
+=item B<< chunk_status($id) >>
+
+Get status (actually, persistent object) of chunk by id.
+
+=cut
+sub chunk_status {
+    my $self = shift;
+    my ($id, $options) = validate_pos(@_, 1, { default => {} });
+    my $file = $self->_chunk_status_file($id);
+    return Yandex::Persistent->new($file, { format => 'json', auto_commit => 0, %$options });
+}
+
+=item B<< clean_ids(@ids) >>
+
+Try to clean chunks with given ids (they'll be cleaned only if all clients completed them).
+
+Returns list of ids for actually removed chunks.
+
+=cut
+sub clean_ids {
+    my $self = shift;
+    my @ids = @_;
+    my @clients = $self->_clients;
+    my @removed_ids;
+
+    ID:
+    for my $id (@ids) {
+        my $file = "$self->{dir}/$id.chunk";
+        my $chunk_status = $self->chunk_status($id);
+
+        for my $client (@clients) {
+            my $client_status = $client->chunk_status($id) or next FILE;
+            if (not $client_status->{status}{pos} or not $chunk_status->{size} or $client_status->{status}{pos} < $chunk_status->{size}) {
+                next ID; # client $client not finished chunk yet
+            }
+        }
+        xunlink($file);
+        $chunk_status->delete();
+
+        push @removed_ids, $id;
+        undef $chunk_status;
+    }
+    return @removed_ids;
+}
+
+# check if it's time for garbage collecting
+sub try_gc {
+    my $self = shift;
+    my $meta = $self->_meta;
+    unless (defined $meta->{gc_timestamp}) {
+        $meta->{gc_timestamp} = time;
+        $meta->commit;
+        return;
+    }
+    if (time - $meta->{gc_timestamp} > $self->{gc_period}) {
+        $self->gc();
+    }
+}
+
+=item B<< gc() >>
+
+Remove all unused chunks and cleanup clients' statuses.
 
 This method is called authomatically on each clients commits, so usually you shouldn't call it manually.
 
 =cut
-sub clean {
+sub gc {
     my $self = shift;
+    my $meta = $self->_meta; # queue is locked when gc is active
     my @clients = $self->_clients;
     my $done_ids;
-    for (@clients) {
-        my $client_done_ids = Set::Object->new($_->get_done_ids);
-        if ($done_ids) {
-            $done_ids = $client_done_ids * $done_ids; # intersection
-        }
-        else {
-            $done_ids = $client_done_ids;
-        }
-    }
 
-    unless ($done_ids) {
-        my $status = $self->_meta; # lock to make sure that nobody commits anything
+    unless (@clients) {
         for my $chunk (glob "$self->{dir}/*.chunk") {
-            unlink $chunk or croak "Can't unlink '$chunk': $!";
+            xunlink($chunk);
         }
         INFO "$self->{dir}: no clients registered, all chunks removed";
         return;
     }
 
-    unless ($done_ids->size) {
-        DEBUG "Nothing to clean";
-        return;
-    }
+    my @removed_ids;
 
-    INFO "Done ids: ".join(', ', $done_ids->elements);
-    for ($done_ids->elements) {
-        my $chunk = "$self->{dir}/$_.chunk";
-        unless (-e $chunk) {
-            WARN "Chunk '$chunk' not found";
+    opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";
+    while (my $file = readdir $dh) {
+        next if $file eq '.';
+        next if $file eq '..';
+        next if $file eq 'meta';
+        next if $file eq 'meta.lock';
+        next if $file eq 'clients';
+
+        # readdir can cache some data, file can be already removed (FIXME - there is a race when this check doesn't help)
+        next unless -f "$self->{dir}/$file";
+
+        my $id;
+        if (($id) = $file =~ /^(\d+)\.(?:chunk)$/) {
+            push @removed_ids, $self->clean_ids($id);
             next;
         }
-        unlink $chunk or croak "Can't unlink '$chunk': $!";
+        elsif (($id) = $file =~ /^(\d+)\.(?:status|status\.lock)$/) {
+            unless (-e "$self->{dir}/$id.chunk") {
+                my $fullname = "$self->{dir}/$file";
+                xunlink($fullname);
+                DEBUG "Lost file $file for $id chunk removed";
+            }
+            next;
+        }
+        $file = "$self->{dir}/$file";
+        WARN "Unknown file $file";
+        xunlink($file);
+    }
+    closedir $dh or die "Can't close '$self->{dir}': $!";
+
+    for (@clients) {
+        $_->clean_ids(@removed_ids);
     }
     for (@clients) {
-        $_->clean_ids($done_ids->elements);
+        $_->gc();
     }
 }
 

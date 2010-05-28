@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 18;
+use Test::More tests => 19;
 use Test::Exception;
 use PPB::Test::Logger;
 
@@ -75,12 +75,12 @@ undef $reader2;
 
 is_deeply( [ glob("tfiles/*.chunk") ], [ 'tfiles/2.chunk', 'tfiles/3.chunk' ], 'first chunk removed, second still remains');
 
-$queue->clean;
-is_deeply( [ glob("tfiles/*.chunk") ], [ 'tfiles/2.chunk', 'tfiles/3.chunk' ], 'two chunks remain after clean');
+$queue->gc;
+is_deeply( [ glob("tfiles/*.chunk") ], [ 'tfiles/2.chunk', 'tfiles/3.chunk' ], 'two chunks remain after gc');
 
 $queue->unregister_client('client1');
 $queue->unregister_client('client2');
-$queue->clean;
+$queue->gc;
 is_deeply( [ glob("tfiles/*.chunk") ], [], 'all chunks removed when no clients registered');
 
 $queue = Stream::Queue->new({
@@ -94,4 +94,21 @@ $queue->register_client('abcd');
 lives_ok(sub {
     $queue->stream('abcd');
 }, 'client() method works after explicit registering');
+
+# cleanup testing
+for (1..100) {
+    my $queue = Stream::Queue->new({
+        dir => 'tfiles',
+    });
+    $queue->write('abc') for 1..3;
+    $queue->commit;
+    my $in = $queue->stream('abcd');
+    $in->read() for 1..3;
+    $in->commit;
+}
+$queue->gc;
+use File::Find;
+my $file_count = 0;
+find(sub { $file_count++ }, 'tfiles');
+cmp_ok($file_count, '<', 20, 'queue contains not too many files');
 
