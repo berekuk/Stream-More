@@ -43,17 +43,16 @@ use Yandex::Logger;
 use base qw(Stream::Storage);
 
 use Params::Validate;
-use File::Temp;
 use File::Path qw(rmtree);
 use File::Spec;
 use Set::Object;
 use IO::Handle;
-use Storable qw(store_fd fd_retrieve);
 use Carp;
 use Yandex::Persistent 1.3.0;
 use Yandex::X 1.1.0;
 
 use Stream::Queue::In;
+use Stream::Queue::Appender;
 
 =item B<< new({ dir => $dir }) >>
 
@@ -97,9 +96,16 @@ sub new {
     return $self;
 }
 
-sub _meta {
+=item B<< meta() >>
+
+Get metadata object.
+
+It's implemented as simple persistent, so it also works as global queue lock.
+
+=cut
+sub meta {
     my $self = shift;
-    return Yandex::Persistent->new("$self->{dir}/meta", { auto_commit => 0 });
+    return Yandex::Persistent->new("$self->{dir}/meta", { auto_commit => 0, format => 'json' });
 }
 
 =item B<< format() >>
@@ -133,19 +139,10 @@ It will stay in temporary file until C<commit>.
 =cut
 sub write($$) {
     my ($self, $item) = @_;
-    unless (exists $self->{tmp}) {
-        $self->{tmp} = File::Temp->new(DIR => $self->{dir});
+    unless (exists $self->{appender}) {
+        $self->{appender} = Stream::Queue::Appender->new($self);
     }
-    store_fd(\$item, $self->{tmp}) or croak "Can't write to '$self->{filename}'";
-}
-
-sub _next_id {
-    my $self = shift;
-    my $status = $self->_meta;
-    $status->{id} ||= 0;
-    $status->{id}++;
-    $status->commit;
-    return $status->{id};
+    $self->{appender}->write($item);
 }
 
 =item B<< commit() >>
@@ -157,24 +154,11 @@ Each C<commit()> invocation creates new chunk; each chunk can be read in paralle
 =cut
 sub commit {
     my $self = shift;
-    unless (exists $self->{tmp}) {
+    unless ($self->{appender}) {
         DEBUG "Nothing to commit";
         return;
     }
-    $self->{tmp}->flush;
-
-    my $new_id = $self->_next_id;
-
-    my $chunk_status = $self->chunk_status($new_id);
-    $chunk_status->{size} = $self->{tmp}->tell;
-
-    my $new_chunk_name = "$self->{dir}/$new_id.chunk";
-    INFO "Commiting $new_chunk_name";
-    xrename($self->{tmp}->filename => $new_chunk_name);
-    $self->{tmp}->unlink_on_destroy(0);
-    delete $self->{tmp};
-
-    $chunk_status->commit;
+    $self->{appender}->commit;
 }
 
 =item B<< register_client($client_name) >>
@@ -187,7 +171,7 @@ Once registered, client must read queue regularly; otherwise queue will become o
 sub register_client {
     my $self = shift;
     my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
-    my $status = $self->_meta; # global lock
+    my $status = $self->meta; # global lock
     if ($self->has_client($client)) {
         return; # already registered
     }
@@ -203,7 +187,7 @@ Unregister client named C<$client_name>.
 sub unregister_client {
     my $self = shift;
     my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
-    my $status = $self->_meta; # global lock
+    my $status = $self->meta; # global lock
     unless ($self->has_client($client)) {
         WARN "No such client '$client', can't unregister";
         return;
@@ -225,16 +209,37 @@ sub has_client {
     return 1;
 }
 
-sub _clients {
+=item B<< clients() >>
+
+Get all storage clients as plain list.
+
+=cut
+sub clients {
     my $self = shift;
     my @client_names = map { File::Spec->abs2rel( $_, "$self->{dir}/clients" ) } grep { -d $_ } glob "$self->{dir}/clients/*";
     return map { Stream::Queue::In->new({ storage => $self, client => $_ }) } @client_names;
 }
 
-sub _chunk_status_file {
+=item B<< chunk_status_file($id) >>
+
+Get chunk status filename by id. It doesn't check if file actually exists.
+
+=cut
+sub chunk_status_file {
     my $self = shift;
     my ($id) = validate_pos(@_, 1);
     return "$self->{dir}/$id.status";
+}
+
+=item B<< chunk_file($id) >>
+
+Get chunk filename by id. It doesn't check if file actually exists.
+
+=cut
+sub chunk_file {
+    my $self = shift;
+    my ($id) = validate_pos(@_, 1);
+    return $self->dir."/$id.chunk";
 }
 
 =item B<< chunk_status($id) >>
@@ -245,7 +250,7 @@ Get status (actually, persistent object) of chunk by id.
 sub chunk_status {
     my $self = shift;
     my ($id, $options) = validate_pos(@_, 1, { default => {} });
-    my $file = $self->_chunk_status_file($id);
+    my $file = $self->chunk_status_file($id);
     return Yandex::Persistent->new($file, { format => 'json', auto_commit => 0, %$options });
 }
 
@@ -259,12 +264,12 @@ Returns list of ids for actually removed chunks.
 sub clean_ids {
     my $self = shift;
     my @ids = @_;
-    my @clients = $self->_clients;
+    my @clients = $self->clients;
     my @removed_ids;
 
     ID:
     for my $id (@ids) {
-        my $file = "$self->{dir}/$id.chunk";
+        my $file = $self->chunk_file($id);
         my $chunk_status = $self->chunk_status($id);
 
         for my $client (@clients) {
@@ -282,10 +287,14 @@ sub clean_ids {
     return @removed_ids;
 }
 
-# check if it's time for garbage collecting
+=item B<< try_gc() >>
+
+Do garbage collecting if it's necessary.
+
+=cut
 sub try_gc {
     my $self = shift;
-    my $meta = $self->_meta;
+    my $meta = $self->meta;
     unless (defined $meta->{gc_timestamp}) {
         $meta->{gc_timestamp} = time;
         $meta->commit;
@@ -305,8 +314,8 @@ This method is called authomatically on each clients commits, so usually you sho
 =cut
 sub gc {
     my $self = shift;
-    my $meta = $self->_meta; # queue is locked when gc is active
-    my @clients = $self->_clients;
+    my $meta = $self->meta; # queue is locked when gc is active
+    my @clients = $self->clients;
     my $done_ids;
 
     unless (@clients) {
@@ -336,7 +345,7 @@ sub gc {
             next;
         }
         elsif (($id) = $file =~ /^(\d+)\.(?:status|status\.lock)$/) {
-            unless (-e "$self->{dir}/$id.chunk") {
+            unless (-e $self->chunk_file($id)) {
                 my $fullname = "$self->{dir}/$file";
                 xunlink($fullname);
                 DEBUG "Lost file $file for $id chunk removed";
