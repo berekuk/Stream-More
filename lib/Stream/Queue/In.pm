@@ -122,7 +122,7 @@ sub _next_chunk {
             next; # chunk already processed in some other process
         }
         if ($self->{prev_chunks}{$id}) {
-            next; # chunk already processing in this process
+            next; # chunk already processed in this process
         }
 
         DEBUG "[$self->{client}] Reading $chunk";
