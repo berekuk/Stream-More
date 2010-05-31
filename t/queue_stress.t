@@ -3,16 +3,18 @@
 use strict;
 use warnings;
 
-use Test::More tests => 3;
+use Test::More tests => 4;
 
 use lib 'lib';
 
 use Yandex::Logger;
 use Yandex::X;
+use Yandex::Lockf;
 use Params::Validate qw(:all);
 use Yandex::Persistent;
 use List::MoreUtils qw(all);
 use PPB::Test::TFiles;
+use Time::HiRes qw(sleep);
 
 use Stream::Queue;
 
@@ -70,10 +72,10 @@ sub stress_run {
     }
     while (my $result = wait) {
         if ($result < 0) {
-            print "stress_run is over\n";
+            #print "stress_run is over\n";
             last;
         }
-        print "child $result is over\n";
+        #print "child $result is over\n";
     }; # TODO - randomly kill childs
 }
 
@@ -82,7 +84,7 @@ sub stress_break {
     die if rand() < $probability;
 }
 
-# stress writing
+# stress writing (3)
 {
     my $queue = Stream::Queue->new({ dir => 'tfiles/queue' });
     $queue->register_client('client');
@@ -90,8 +92,8 @@ sub stress_break {
 
     my $max_id = 10;
     my $portions = 3;
-    my $invoke_count = 100;
-    my $parallel = 5;
+    my $invoke_count = 10;
+    my $parallel = 3;
 
     stress_run({
         code => sub {
@@ -136,5 +138,53 @@ sub stress_break {
     ok(scalar(all { $_ and $_ >= $number_of_items_by_id and $_ <= $number_of_items_by_id * 3 } @$idstat{ 1..$max_id }), 'there are enough items with each id');
     my $idcount = $total / $max_id;
     ok(scalar(all { $_ == $idcount } @$idstat{ 1..$max_id }), 'all ids are equal');
+}
+
+# stress reading (1)
+{
+    PPB::Test::TFiles::import();
+
+    my $total = 1000;
+    {
+        my $queue = Stream::Queue->new({ dir => 'tfiles/queue' });
+        $queue->register_client('client');
+
+        for my $id (1..$total) {
+            $queue->write({ id => "id$id", time => time });
+            $queue->commit if rand() < $total / 10;
+        }
+        $queue->commit;
+    }
+
+    stress_run({
+        code => sub {
+            my $queue = Stream::Queue->new({ dir => 'tfiles/queue' });
+            stress_break();
+            sleep 0.0001 * rand(3);
+            my $in = $queue->stream('client');
+            my $log = xopen('>>', 'tfiles/log');
+            $log->autoflush(1);
+            for (1..10) {
+                sleep 0.0001 * rand(3);
+                my $item = $in->read() or last;
+                sleep 0.0001 * rand(3);
+                my $lock = lockf('tfiles/lock');
+                xprint($log, "$item->{id}\n");
+            }
+            sleep 0.0001;
+            $in->commit;
+        },
+        parallel => 3,
+        invoke_count => int($total / 3) + 100,
+    });
+
+    my @ids;
+    my $fh = xopen('<', 'tfiles/log');
+    while (<$fh>) {
+        chomp;
+        push @ids, $_;
+    }
+    my %ids = map { $_ => 1 } @ids;
+    is_deeply([ sort keys %ids ], [ sort map { "id$_" } 1..$total ], 'all ids read from queue');
 }
 
