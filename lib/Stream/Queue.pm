@@ -268,7 +268,7 @@ sub clean_ids {
         my $chunk_status = $self->chunk_status($id);
 
         for my $client (@clients) {
-            my $client_status = $client->chunk_status($id) or next FILE;
+            my $client_status = $client->chunk_status($id) or next ID;
             if (not $client_status->{status}{pos} or not $chunk_status->{size} or $client_status->{status}{pos} < $chunk_status->{size}) {
                 next ID; # client $client not finished chunk yet
             }
