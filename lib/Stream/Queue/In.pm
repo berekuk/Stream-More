@@ -24,14 +24,11 @@ use base qw(Stream::In);
 use Params::Validate;
 
 use Carp;
-use Storable qw(fd_retrieve);
 use IO::Handle;
-use File::Spec;
 use Yandex::Persistent 1.3.0;
 use Yandex::Logger;
-use Yandex::X;
 use Yandex::Lockf 3.0.0;
-use Log::Unrotate;
+use Yandex::X;
 use Stream::Queue::Chunk;
 
 =item C<< new({ storage => $queue, client => $client }) >>
@@ -52,6 +49,7 @@ sub new {
     }
     $self->{dir} = $self->{storage}->dir."/clients/$self->{client}";
     $self->{prev_chunks} = {};
+    $self->{lock} = lockf("$self->{dir}/lock", { shared => 1 });
     bless $self => $class;
     return $self;
 
@@ -81,8 +79,7 @@ sub _next_id {
 sub _chunk2id {
     my $self = shift;
     my ($file) = validate_pos(@_, 1);
-    $file = File::Spec->abs2rel($file, $self->{dir});
-    my ($id) = $file =~ /^(\d+)\.chunk$/ or die "Wrong file $file";
+    my ($id) = $file =~ /(\d+)\.chunk$/ or die "Wrong file $file";
     return $id;
 }
 
@@ -189,12 +186,12 @@ Cleanup lost files.
 =cut
 sub gc {
     my $self = shift;
+    my $lock = lockf($self->{lock}->file);
     opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";
     while (my $file = readdir $dh) {
         next if $file eq '.';
         next if $file eq '..';
-        next if $file eq 'pos';
-        next if $file =~ /^meta/;
+        next if $file =~ /(^meta|^pos$|^lock$)/;
         my $unlink = sub {
             xunlink("$self->{dir}/$file");
         };
