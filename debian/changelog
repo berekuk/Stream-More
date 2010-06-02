@@ -1,12 +1,9 @@
 libstream-more-perl (0.5.1) UNRELEASED; urgency=low
 
   * Stream::Queue improvements
-   - preparing to be able to append to chunks
-   - client's status file separated into chunk-specific files
-   - gc() and clean_ids() code separated; gc() happens by timer, not on every
-   commit
+   - permanent data is keeped in log, chunks created per-client on depand
+   - gc() method instead of old clean_ids(), called only from time to time
    - stress tests and benchmarks
-
 
  -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 01 Jun 2010 16:52:11 +0400
 
