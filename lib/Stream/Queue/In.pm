@@ -31,6 +31,8 @@ use Yandex::Persistent 1.3.0;
 use Yandex::Logger;
 use Yandex::X;
 use Yandex::Lockf 3.0.0;
+use Log::Unrotate;
+use Stream::Queue::Chunk;
 
 =item C<< new({ storage => $queue, client => $client }) >>
 
@@ -51,58 +53,70 @@ sub new {
     $self->{dir} = $self->{storage}->dir."/clients/$self->{client}";
     $self->{prev_chunks} = {};
     bless $self => $class;
-
-    if (-e "$self->{dir}/status") {
-        $self->_convert_from_old_status;
-    }
     return $self;
 
 }
 
-sub _convert_from_old_status {
-    my $self = shift;
-    my $old_status = Yandex::Persistent->new("$self->{dir}/status", { auto_commit => 0 });
-    for my $id (keys %{ $old_status->{pos} }) {
-        my $pos = $old_status->{pos}{$id};
-        my $chunk_status = Yandex::Persistent->new("$self->{dir}/$id.status", { format => 'json', auto_commit => 0 });
-        $chunk_status->{pos} = $pos;
-        $chunk_status->commit;
-    }
-    xunlink($old_status);
-    undef $old_status; # status file will not be rewritten because auto_commit is disabled
-    xunlink("$old_status.lock");
-}
+=item B<< meta() >>
 
-=item C<< chunk_status($id) >>
+Get metadata object.
 
-Get chunk info by id.
-
-Returns hashref C<< { id => $id, status => $persistent } >>.
+It's implemented as simple persistent, so it also works as global queue lock.
 
 =cut
-sub chunk_status {
+sub meta {
     my $self = shift;
-    my ($id) = validate_pos(@_, 1);
-    my $status = Yandex::Persistent->new("$self->{dir}/$id.status", { format => 'json', auto_commit => 0 }, { blocking => 0 }) or return;
-    return {
-        id => $id,
-        status => $status,
-    };
+    return Yandex::Persistent->new("$self->{dir}/meta", { auto_commit => 0, format => 'json' });
+}
+
+sub _next_id {
+    my $self = shift;
+    my $status = $self->meta;
+    $status->{id} ||= 0;
+    $status->{id}++;
+    $status->commit;
+    return $status->{id};
 }
 
 sub _chunk2id {
     my $self = shift;
     my ($file) = validate_pos(@_, 1);
-    $file = File::Spec->abs2rel($file, $self->{storage}->dir);
+    $file = File::Spec->abs2rel($file, $self->{dir});
     my ($id) = $file =~ /^(\d+)\.chunk$/ or die "Wrong file $file";
     return $id;
+}
+
+sub _new_chunk {
+    my $self = shift;
+    my $in = $self->{storage}->log->stream(Stream::Log::Cursor->new({
+        PosFile => "$self->{dir}/pos",
+    }));
+    my $new_id = $self->_next_id;
+    my $chunk_name = "$self->{dir}/$new_id.chunk";
+    my $chunk_data = $in->read_chunk(100) or return;
+    Stream::Queue::Chunk->new($self->{dir}, $new_id, $chunk_data);
+    $in->commit;
+    return $new_id;
 }
 
 sub _next_chunk {
     my $self = shift;
 
-    # TODO - keep buffer of next chunks, just in case there are a LOT of chunks and glob() call is too expensive
-    my @chunk_files = glob $self->{storage}->dir."/*.chunk";
+    my $try_chunk = sub {
+        my $chunk_name = shift;
+        my $id = $self->_chunk2id($chunk_name);
+        if ($self->{prev_chunks}{$id}) {
+            return; # chunk already processed in this process
+        }
+
+        my $chunk = Stream::Queue::Chunk->load($self->{dir}, $id) or return;
+
+        DEBUG "[$self->{client}] Reading $chunk_name";
+        $self->{chunk} = $chunk;
+        return 1;
+    };
+
+    my @chunk_files = glob $self->{dir}."/*.chunk";
 
     @chunk_files =
         map { $_->[1] }
@@ -111,30 +125,13 @@ sub _next_chunk {
         @chunk_files; # resort by ids
 
     for my $chunk (@chunk_files) {
-        my $id = $self->_chunk2id($chunk);
-        my $chunk_status = $self->{storage}->chunk_status($id, { read_only => 1 });
-        my $client_chunk_status = $self->chunk_status($id) or next;
-
-        unless ($chunk_status->{size}) {
-            next; # chunk is empty
-        }
-        if ($client_chunk_status->{status}{pos} and $client_chunk_status->{status}{pos} >= $chunk_status->{size}) {
-            next; # chunk already processed in some other process
-        }
-        if ($self->{prev_chunks}{$id}) {
-            next; # chunk already processed in this process
-        }
-
-        DEBUG "[$self->{client}] Reading $chunk";
-        $self->{current_chunk} = $client_chunk_status;
-
-        $self->{fh} = xopen('<', $chunk);
-        if (my $pos = $client_chunk_status->{status}{pos}) {
-            seek $self->{fh}, $pos, 0 or die "Can't seek to $pos in $chunk";
-        }
-        return 1;
+        $try_chunk->($chunk) and return 1;
     }
+
     # no chunks left
+    my $new_chunk_id = $self->_new_chunk or return;
+    $try_chunk->("$self->{dir}/$new_chunk_id.chunk") and return 1;
+
     return;
 }
 
@@ -148,26 +145,19 @@ This method chooses next unlocked chunk and reads it from position saved from la
 sub read {
     my $self = shift;
 
-    if ($self->{fh} and $self->{fh}->eof) {
-        # chunk is over, keep its lock (we don't want to commit yet) and switch to next chunk if possible
-        DEBUG "[$self->{client}] Chunk is over";
-        my $pos = tell $self->{fh};
-        if ($pos < 0) {
-            die "tell failed";
+    while () {
+        unless ($self->{chunk}) {
+            $self->_next_chunk or return undef;
         }
-        $self->{current_chunk}{status}{pos} = $pos;
-        $self->{prev_chunks}{ delete $self->{current_chunk}{id} } = $self->{current_chunk};
-        delete $self->{fh};
+        my $item = $self->{chunk}->read;
+        unless (defined $item) {
+            # chunk is over
+            $self->{prev_chunks}{ $self->{chunk}->id } = $self->{chunk};
+            delete $self->{chunk};
+            next;
+        }
+        return $item;
     }
-
-    unless ($self->{fh}) {
-        $self->_next_chunk or return;
-    }
-    my $item = fd_retrieve($self->{fh});
-    unless ($item) {
-        return;
-    }
-    return $$item;
 }
 
 
@@ -180,41 +170,16 @@ sub commit {
     my $self = shift;
 
     INFO "Commiting $self->{dir}";
-    my @ids = keys %{ $self->{prev_chunks} };
 
-    for my $id (@ids) {
-        my $prev_chunk = $self->{prev_chunks}{$id};
-        $prev_chunk->{status}->commit;
-    }
-    if ($self->{fh}) {
-        my $id = $self->{current_chunk}{id};
-        $self->{current_chunk}{status}{pos} = tell $self->{fh};
-        $self->{current_chunk}{status}->commit;
+    if ($self->{chunk}) {
+        $self->{chunk}->commit;
+        delete $self->{chunk};
     }
 
+    $_->remove for values %{ $self->{prev_chunks} };
     $self->{prev_chunks} = {};
-    $self->{current_chunk} = {};
-    delete $self->{fh};
 
-    $self->{storage}->clean_ids(@ids);
     return;
-}
-
-=item C<< clean_ids(@ids) >>
-
-Remove all references to specified ids from client dir.
-
-You shouldn't call this method from anywhere except C<Stream::Queue>, which uses it for cleanup. API is still very unstable.
-
-=cut
-sub clean_ids {
-    my $self = shift;
-    my @ids = @_;
-    for (@ids) {
-        my $status = $self->chunk_status($_) or next;
-        DEBUG "[$self->{client}] Cleaning status for chunk $_";
-        $status->{status}->delete();
-    }
 }
 
 =item C<< gc() >>
@@ -228,11 +193,13 @@ sub gc {
     while (my $file = readdir $dh) {
         next if $file eq '.';
         next if $file eq '..';
+        next if $file eq 'pos';
+        next if $file =~ /^meta/;
         my $unlink = sub {
             xunlink("$self->{dir}/$file");
         };
         my $id;
-        if (($id) = $file =~ /^(\d+)\.status\.lock$/) {
+        if (($id) = $file =~ /^(\d+)\.lock$/) {
             unless (-e "$self->{dir}/$id.status") {
                 $unlink->();
                 DEBUG "[$self->{client}] Lost lock file $file removed";
@@ -245,6 +212,13 @@ sub gc {
                 DEBUG "[$self->{client}] Lost file $file for $id chunk removed";
             }
             next; # TODO - remove files with old ids
+        }
+        elsif ($file =~ /^(\d+)\.chunk.new$/) {
+            my $age = time - (stat($file))[10];
+            unless ($age < 600) {
+                $unlink->();
+                DEBUG "[$self->{client}] Temp file $file removed";
+            }
         }
         $unlink->();
         WARN "[$self->{client}] Unknown file $file removed";

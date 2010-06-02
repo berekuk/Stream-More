@@ -168,8 +168,5 @@ sub bench {
     diag("reading ".($baseline_chunks * 2)." chunks: $double_time");
     diag("reading ".($baseline_chunks * 4)." chunks; $quadro_time");
 
-    TODO: {
-        local $TODO = "read don't scale when there are a lot of chunks";
-        cmp_ok($quadro_time / $time, '<', 5, 'read scales good enough');
-    }
+    cmp_ok($quadro_time / $time, '<', 5, 'read scales good enough');
 }

@@ -52,7 +52,8 @@ use Yandex::Persistent 1.3.0;
 use Yandex::X 1.1.0;
 
 use Stream::Queue::In;
-use Stream::Queue::Appender;
+use Stream::Log;
+use Stream::Formatter::LinedStorable;
 
 =item B<< new({ dir => $dir }) >>
 
@@ -128,6 +129,13 @@ sub dir {
     return $self->{dir};
 }
 
+sub log {
+    my $self = shift;
+    return Stream::Formatter::LinedStorable->wrap(
+        Stream::Log->new($self->dir."/log")
+    );
+}
+
 =item B<< write($item) >>
 
 Write new item into queue.
@@ -140,7 +148,7 @@ It will stay in temporary file until C<commit>.
 sub write($$) {
     my ($self, $item) = @_;
     unless (exists $self->{appender}) {
-        $self->{appender} = Stream::Queue::Appender->new($self);
+        $self->{appender} = $self->log;
     }
     $self->{appender}->write($item);
 }
@@ -220,73 +228,6 @@ sub clients {
     return map { Stream::Queue::In->new({ storage => $self, client => $_ }) } @client_names;
 }
 
-=item B<< chunk_status_file($id) >>
-
-Get chunk status filename by id. It doesn't check if file actually exists.
-
-=cut
-sub chunk_status_file {
-    my $self = shift;
-    my ($id) = validate_pos(@_, 1);
-    return "$self->{dir}/$id.status";
-}
-
-=item B<< chunk_file($id) >>
-
-Get chunk filename by id. It doesn't check if file actually exists.
-
-=cut
-sub chunk_file {
-    my $self = shift;
-    my ($id) = validate_pos(@_, 1);
-    return $self->dir."/$id.chunk";
-}
-
-=item B<< chunk_status($id) >>
-
-Get status (actually, persistent object) of chunk by id.
-
-=cut
-sub chunk_status {
-    my $self = shift;
-    my ($id, $options) = validate_pos(@_, 1, { default => {} });
-    my $file = $self->chunk_status_file($id);
-    return Yandex::Persistent->new($file, { format => 'json', auto_commit => 0, %$options });
-}
-
-=item B<< clean_ids(@ids) >>
-
-Try to clean chunks with given ids (they'll be cleaned only if all clients completed them).
-
-Returns list of ids for actually removed chunks.
-
-=cut
-sub clean_ids {
-    my $self = shift;
-    my @ids = @_;
-    my @clients = $self->clients;
-    my @removed_ids;
-
-    ID:
-    for my $id (@ids) {
-        my $file = $self->chunk_file($id);
-        my $chunk_status = $self->chunk_status($id);
-
-        for my $client (@clients) {
-            my $client_status = $client->chunk_status($id) or next ID;
-            if (not $client_status->{status}{pos} or not $chunk_status->{size} or $client_status->{status}{pos} < $chunk_status->{size}) {
-                next ID; # client $client not finished chunk yet
-            }
-        }
-        xunlink($file);
-        $chunk_status->delete();
-
-        push @removed_ids, $id;
-        undef $chunk_status;
-    }
-    return @removed_ids;
-}
-
 =item B<< try_gc() >>
 
 Do garbage collecting if it's necessary.
@@ -316,51 +257,6 @@ sub gc {
     my $self = shift;
     my $meta = $self->meta; # queue is locked when gc is active
     my @clients = $self->clients;
-    my $done_ids;
-
-    unless (@clients) {
-        for my $chunk (glob "$self->{dir}/*.chunk") {
-            xunlink($chunk);
-        }
-        INFO "$self->{dir}: no clients registered, all chunks removed";
-        return;
-    }
-
-    my @removed_ids;
-
-    opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";
-    while (my $file = readdir $dh) {
-        next if $file eq '.';
-        next if $file eq '..';
-        next if $file eq 'meta';
-        next if $file eq 'meta.lock';
-        next if $file eq 'clients';
-
-        # readdir can cache some data, file can be already removed (FIXME - there is a race when this check doesn't help)
-        next unless -f "$self->{dir}/$file";
-
-        my $id;
-        if (($id) = $file =~ /^(\d+)\.(?:chunk)$/) {
-            push @removed_ids, $self->clean_ids($id);
-            next;
-        }
-        elsif (($id) = $file =~ /^(\d+)\.(?:status|status\.lock)$/) {
-            unless (-e $self->chunk_file($id)) {
-                my $fullname = "$self->{dir}/$file";
-                xunlink($fullname);
-                DEBUG "Lost file $file for $id chunk removed";
-            }
-            next;
-        }
-        $file = "$self->{dir}/$file";
-        WARN "Unknown file $file";
-        xunlink($file);
-    }
-    closedir $dh or die "Can't close '$self->{dir}': $!";
-
-    for (@clients) {
-        $_->clean_ids(@removed_ids);
-    }
     for (@clients) {
         $_->gc();
     }
