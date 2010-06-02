@@ -129,13 +129,6 @@ sub dir {
     return $self->{dir};
 }
 
-sub log {
-    my $self = shift;
-    return Stream::Formatter::LinedStorable->wrap(
-        Stream::Log->new($self->dir."/log")
-    );
-}
-
 =item B<< write($item) >>
 
 Write new item into queue.
@@ -280,6 +273,20 @@ sub stream {
 
 sub class_caps {
     { persistent => 1 }
+}
+
+=item B<< log() >>
+
+Get underlying log storage object.
+
+This method is for internal usage only.
+
+=cut
+sub log {
+    my $self = shift;
+    return Stream::Formatter::LinedStorable->wrap(
+        Stream::Log->new($self->dir."/log")
+    );
 }
 
 =back
