@@ -56,14 +56,15 @@ sub bench {
 # write parallelism
 {
 
+    my $total = 1000;
+    my $portion = 100;
     my $bench_write = sub {
         my $parallel = shift;
         bench({
             forks => 10,
             parallel => $parallel,
-            total => 1000,
+            total => $total,
             code => sub {
-                my $portion = 100;
                 my $queue = Stream::Queue->new({ dir => 'tfiles/queue' });
                 for (1..$portion) {
                     $queue->write({ id => $_ });
@@ -84,13 +85,14 @@ sub bench {
     # TODO - check that data is valid in both cases?
 
     my $write_parallelism = $seq_time / $parallel_time;
-    diag("seq_time: $seq_time");
-    diag("parallel_time: $parallel_time");
+    diag("writing ".($total * $portion)." items using 1 process: $seq_time");
+    diag("writing ".($total * $portion)." items using 10 processes: $parallel_time");
     cmp_ok($write_parallelism, '>', 4, '10 processes are faster than 1 process at least in 4 times');
 }
 
 # write scaling
 {
+    my $portion = 100;
     my $bench_write = sub {
         my $total = shift;
         bench({
@@ -98,7 +100,6 @@ sub bench {
             parallel => 3,
             total => $total,
             code => sub {
-                my $portion = 100;
                 my $queue = Stream::Queue->new({ dir => 'tfiles/queue' });
                 for (1..$portion) {
                     $queue->write({ id => $_ });
@@ -114,22 +115,23 @@ sub bench {
         });
     };
 
-    my $time = $bench_write->(1000);
-    my $double_time = $bench_write->(2000);
-    my $quadro_time = $bench_write->(4000);
+    my $baseline = 1000;
+    my $time = $bench_write->($baseline);
+    my $double_time = $bench_write->($baseline * 2);
+    my $quadro_time = $bench_write->($baseline * 4);
 
-    diag("writing 1000 chunks: $time");
-    diag("writing 2000 chunks: $double_time");
-    diag("writing 4000 chunks: $quadro_time");
+    diag("writing ".($portion * $baseline / 1000)."k items: $time");
+    diag("writing ".($portion * $baseline * 2 / 1000)."k items: $double_time");
+    diag("writing ".($portion * $baseline * 4 / 1000)."k items: $quadro_time");
     cmp_ok($quadro_time / $time, '<', 5, 'write scales good enough');
 }
 
 # read scaling
 {
 
+    my $portion = 100;
     my $bench_read = sub {
         my $commit_count = shift;
-        my $portion_size = 100;
         bench({
             forks => 3,
             parallel => 3,
@@ -142,7 +144,7 @@ sub bench {
 
                 $queue = Stream::Queue->new({ dir => 'tfiles/queue' });
                 for (1..$commit_count) {
-                    for (1..$portion_size) {
+                    for (1..$portion) {
                         $queue->write({ id => $_ });
                     }
                     $queue->commit;
@@ -151,7 +153,7 @@ sub bench {
             code => sub {
                 my $queue = Stream::Queue->new({ dir => 'tfiles/queue' });
                 my $client = $queue->stream('client');
-                for (1..($portion_size / 2)) {
+                for (1..($portion / 2)) {
                     $client->read();
                 }
                 $client->commit;
@@ -159,14 +161,14 @@ sub bench {
         });
     };
 
-    my $baseline_chunks = 20;
-    my $time = $bench_read->($baseline_chunks);
-    my $double_time = $bench_read->(2 * $baseline_chunks);
-    my $quadro_time = $bench_read->(4 * $baseline_chunks);
+    my $baseline = 100;
+    my $time = $bench_read->($baseline);
+    my $double_time = $bench_read->(2 * $baseline);
+    my $quadro_time = $bench_read->(4 * $baseline);
 
-    diag("reading $baseline_chunks chunks: $time");
-    diag("reading ".($baseline_chunks * 2)." chunks: $double_time");
-    diag("reading ".($baseline_chunks * 4)." chunks; $quadro_time");
+    diag("reading ".($baseline * $portion / 1000)."k items: $time");
+    diag("reading ".($baseline * $portion * 2 / 1000)."k items: $double_time");
+    diag("reading ".($baseline * $portion * 4 / 1000)."k items: $quadro_time");
 
     cmp_ok($quadro_time / $time, '<', 5, 'read scales good enough');
 }
