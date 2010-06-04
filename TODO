@@ -2,3 +2,4 @@ Stream::Queue:
 - rotate log periodically
 - remove old logs when everybody finished it
 - improve client parallelism - variable chunk sizes
+- migrate from old format
