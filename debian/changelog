@@ -1,9 +1,15 @@
 libstream-more-perl (0.5.1) UNRELEASED; urgency=low
 
+!THIS VERSION IS NOT READY TO BE RELEASED UNTIL queue-improvements branch is
+stable, sorry!
+
   * Stream::Queue improvements
    - permanent data is keeped in log, chunks created per-client on depand
    - gc() method instead of old clean_ids(), called only from time to time
    - stress tests and benchmarks
+  * Stream::Simple:
+   - code_out() - another version of processor() from Stream::Out
+   - array_seq() renamed to array_in()
 
  -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 01 Jun 2010 16:52:11 +0400
 
