@@ -1,5 +1,6 @@
 Stream::Queue:
-- rotate log periodically
-- remove old logs when everybody finished it
 - improve client parallelism - variable chunk sizes
+- improve write parallelism - writing into several chunks
+- lock chunks when reading
+- fix gc
 - migrate from old format

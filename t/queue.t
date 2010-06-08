@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 5;
+use Test::More tests => 6;
 
 use lib 'lib';
 
@@ -117,8 +117,6 @@ sub read_n {
         [ map { { id => $_, str => "id$_" } } (111..120) ],
     );
 
-    warn "total: ".scalar(@written);
-
     my $queue = Stream::Queue->new({
         dir => 'tfiles',
     });
@@ -162,4 +160,61 @@ sub read_n {
 
     is_deeply(\@items1, \@written, 'reading from queue with several instances of client');
     is_deeply(\@items2, \@written, 'reading from queue with different client');
+}
+
+# max_chunk_* (1)
+{
+    PPB::Test::TFiles::import();
+    my $queue = Stream::Queue->new({
+        dir => 'tfiles',
+        max_chunk_size => 100,
+        max_chunk_count => 5,
+    });
+
+    my $write = sub {
+        $queue->write([ 1..100 ]);
+        $queue->commit;
+    };
+
+    $write->() for 1..5;
+    throws_ok(sub {
+        $write->();
+    }, qr/Chunk count exceeded/, 'write fails when all chunks are full');
+}
+
+# gc
+{
+    PPB::Test::TFiles::import();
+    my $queue = Stream::Queue->new({
+        dir => 'tfiles',
+        max_chunk_size => 100,
+        max_chunk_count => 1000,
+    });
+
+    my $write = sub {
+        $queue->write([ 1..100 ]);
+        $queue->commit;
+    };
+
+    $write->() for 1..100;
+
+    my $first_in = $queue->stream('first');
+    my $second_in = $queue->stream('second');
+    for (1..100) {
+        for my $in ($first_in, $second_in) {
+            $in->read;
+            $in->commit;
+        }
+    }
+
+    use File::Find;
+    my $calc_count = sub {
+        my $count = 0;
+        find(sub { $count++ }, 'tfiles');
+        $count;
+    };
+
+    cmp_ok($calc_count->(), '>', 200);
+    $queue->gc;
+    cmp_ok($calc_count->(), '<', 20);
 }

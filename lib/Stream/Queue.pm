@@ -36,11 +36,12 @@ C<Stream::Queue> and C<Stream::Queue::In> implement local file-based FIFO queue 
 
 =cut
 
+use parent qw(Stream::Storage);
+
 use Yandex::Version '{{DEBIAN_VERSION}}';
 
 use Yandex::Logger;
-
-use base qw(Stream::Storage);
+use Yandex::Lockf;
 
 use Params::Validate;
 use File::Path qw(rmtree);
@@ -52,8 +53,7 @@ use Yandex::Persistent 1.3.0;
 use Yandex::X 1.1.0;
 
 use Stream::Queue::In;
-use Stream::Log;
-use Stream::Formatter::LinedStorable;
+use Stream::Queue::BigChunkDir;
 
 =item B<< new({ dir => $dir }) >>
 
@@ -79,6 +79,8 @@ sub new {
         format => { default => 'storable' },
         autoregister => { default => 1 },
         gc_period => { default => 300 },
+        max_chunk_size => { default => 100 * 1024 * 1024, regex => qr/^\d+$/ },
+        max_chunk_count => { default => 100, regex => qr/^\d+$/ },
     });
     unless ($self->{format} eq 'storable') {
         croak "Only 'storable' format is supported";
@@ -92,6 +94,11 @@ sub new {
     unless (-d "$self->{dir}/clients") {
         xmkdir("$self->{dir}/clients");
     }
+    $self->{chunk_dir} = Stream::Queue::BigChunkDir->new({
+        dir => $self->{dir},
+        max_chunk_size => $self->{max_chunk_size},
+        max_chunk_count => $self->{max_chunk_count},
+    });
     bless $self => $class;
     $self->try_gc;
     return $self;
@@ -129,37 +136,39 @@ sub dir {
     return $self->{dir};
 }
 
+sub chunks_info {
+    my $self = shift;
+    return $self->{chunk_dir}->chunks_info;
+}
+
 =item B<< write($item) >>
 
 Write new item into queue.
 
 Item can be any string or serializable structure, but it can't be C<undef>.
 
-It will stay in temporary file until C<commit>.
-
 =cut
 sub write($$) {
     my ($self, $item) = @_;
-    unless (exists $self->{appender}) {
-        $self->{appender} = $self->log;
+    unless (exists $self->{out}) {
+        $self->{out} = $self->{chunk_dir}->out;
     }
-    $self->{appender}->write($item);
+    $self->{out}->write($item);
 }
 
 =item B<< commit() >>
 
-Commit temporary file with written items into queue.
-
-Each C<commit()> invocation creates new chunk; each chunk can be read in parallel with others, so try to keep chunks not too large and not too small.
+Commit written items.
 
 =cut
 sub commit {
     my $self = shift;
-    unless ($self->{appender}) {
+    unless ($self->{out}) {
         DEBUG "Nothing to commit";
         return;
     }
-    $self->{appender}->commit;
+    $self->{out}->commit;
+    delete $self->{out}; # out recreated after every commit, otherwise we would hold one old chunk opened for too long
 }
 
 =item B<< register_client($client_name) >>
@@ -249,7 +258,23 @@ This method is called authomatically on each clients commits, so usually you sho
 sub gc {
     my $self = shift;
     my $meta = $self->meta; # queue is locked when gc is active
+
+    my @chunks_info = $self->{chunk_dir}->chunks_info;
     my @clients = $self->clients;
+
+    CHUNK:
+    for my $info (@chunks_info) {
+        my $lock = lockf($info->{lock_file}, { blocking => 0 }) or next;
+        for my $client (@clients) {
+            my $lag = $client->lag($info->{id});
+            next CHUNK if not defined $lag;
+            next CHUNK if $lag > 0;
+        }
+        # chunk can be safely removed
+        xunlink($info->{file});
+        xunlink($info->{lock_file});
+    }
+
     for (@clients) {
         $_->gc();
     }
@@ -273,20 +298,6 @@ sub stream {
 
 sub class_caps {
     { persistent => 1 }
-}
-
-=item B<< log() >>
-
-Get underlying log storage object.
-
-This method is for internal usage only.
-
-=cut
-sub log {
-    my $self = shift;
-    return Stream::Formatter::LinedStorable->wrap(
-        Stream::Log->new($self->dir."/log")
-    );
 }
 
 =back

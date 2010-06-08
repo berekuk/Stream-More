@@ -30,6 +30,8 @@ use Yandex::Logger;
 use Yandex::Lockf 3.0.0;
 use Yandex::X;
 use Stream::Queue::Chunk;
+use Stream::Formatter::LinedStorable;
+use Stream::File::Cursor;
 
 =item C<< new({ storage => $queue, client => $client }) >>
 
@@ -85,14 +87,23 @@ sub _chunk2id {
 
 sub _new_chunk {
     my $self = shift;
-    my $in = $self->{storage}->log->stream(Stream::Log::Cursor->new({
-        PosFile => "$self->{dir}/pos",
-    }));
+
+    my @chunks_info = $self->{storage}->chunks_info;
+
+    my $data;
+    my @ins;
+    for my $info (@chunks_info) {
+        my $in = Stream::Formatter::LinedStorable->wrap(Stream::File->new($info->{file}))->stream(
+            Stream::File::Cursor->new("$self->{dir}/$info->{id}.pos")
+        );
+        my $chunk_data = $in->read_chunk(100) or next;
+        push @ins, $in;
+        push @$data, @$chunk_data;
+    }
+    return unless $data;
     my $new_id = $self->_next_id;
-    my $chunk_name = "$self->{dir}/$new_id.chunk";
-    my $chunk_data = $in->read_chunk(100) or return;
-    Stream::Queue::Chunk->new($self->{dir}, $new_id, $chunk_data);
-    $in->commit;
+    Stream::Queue::Chunk->new($self->{dir}, $new_id, $data);
+    $_->commit for @ins;
     return $new_id;
 }
 
@@ -191,7 +202,7 @@ sub gc {
     while (my $file = readdir $dh) {
         next if $file eq '.';
         next if $file eq '..';
-        next if $file =~ /(^meta|^pos$|^lock$)/;
+        next if $file =~ /(^meta|^lock$)/;
         my $unlink = sub {
             xunlink("$self->{dir}/$file");
         };
@@ -201,14 +212,18 @@ sub gc {
                 $unlink->();
                 DEBUG "[$self->{client}] Lost lock file $file removed";
             }
-            next;
         }
         elsif (($id) = $file =~ /^(\d+)\.status$/) {
+            unless (-e "$self->{dir}/$id.chunk") {
+                $unlink->();
+                DEBUG "[$self->{client}] Lost status file $file for $id client chunk removed";
+            }
+        }
+        elsif (($id) = $file =~ /^(\d+)\.pos$/) {
             unless (-e $self->{storage}->dir."/$id.chunk") {
                 $unlink->();
-                DEBUG "[$self->{client}] Lost file $file for $id chunk removed";
+                DEBUG "[$self->{client}] Lost pos file $file for $id chunk removed";
             }
-            next; # TODO - remove files with old ids
         }
         elsif ($file =~ /^(\d+)\.chunk.new$/) {
             my $age = time - (stat($file))[10];
@@ -217,10 +232,22 @@ sub gc {
                 DEBUG "[$self->{client}] Temp file $file removed";
             }
         }
-        $unlink->();
-        WARN "[$self->{client}] Unknown file $file removed";
+        else {
+            $unlink->();
+            WARN "[$self->{client}] Unknown file $file removed";
+        }
     }
     closedir $dh or die "Can't close '$self->{dir}': $!";
+}
+
+sub lag {
+    my ($self, $id) = @_;
+    my $cursor_file = "$self->{dir}/$id.pos";
+    unless (-e $cursor_file) {
+        return;
+    }
+    my $cursor = Stream::File::Cursor->new($cursor_file);
+    return $cursor->position;
 }
 
 =back
