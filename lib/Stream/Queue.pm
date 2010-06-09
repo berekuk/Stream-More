@@ -113,7 +113,7 @@ It's implemented as simple persistent, so it also works as global queue lock.
 =cut
 sub meta {
     my $self = shift;
-    return Yandex::Persistent->new("$self->{dir}/meta", { auto_commit => 0, format => 'json' });
+    return Yandex::Persistent->new("$self->{dir}/queue.meta", { auto_commit => 0, format => 'json' });
 }
 
 =item B<< format() >>
@@ -169,6 +169,7 @@ sub commit {
     }
     $self->{out}->commit;
     delete $self->{out}; # out recreated after every commit, otherwise we would hold one old chunk opened for too long
+    $self->try_gc;
 }
 
 =item B<< register_client($client_name) >>
@@ -237,14 +238,21 @@ Do garbage collecting if it's necessary.
 =cut
 sub try_gc {
     my $self = shift;
+    if ($self->{gc_timestamp_cached} and time < $self->{gc_timestamp_cached} + $self->{gc_period}) {
+        return;
+    }
+
     my $meta = $self->meta;
     unless (defined $meta->{gc_timestamp}) {
-        $meta->{gc_timestamp} = time;
+        $self->{gc_timestamp_cached} = $meta->{gc_timestamp} = time;
         $meta->commit;
         return;
     }
-    if (time - $meta->{gc_timestamp} > $self->{gc_period}) {
-        $self->gc();
+    $self->{gc_timestamp_cached} = $meta->{gc_timestamp};
+    if (time > $meta->{gc_timestamp} + $self->{gc_period}) {
+        $self->{gc_timestamp_cached} = $meta->{gc_timestamp} = time;
+        $meta->commit;
+        $self->gc($meta);
     }
 }
 
@@ -256,8 +264,9 @@ This method is called authomatically on each clients commits, so usually you sho
 
 =cut
 sub gc {
-    my $self = shift;
-    my $meta = $self->meta; # queue is locked when gc is active
+    my ($self, $meta) = @_;
+    $meta ||= $self->meta; # queue is locked when gc is active
+    my $cd_lock = $self->{chunk_dir}->lock; # chunk dir is locked too
 
     my @chunks_info = $self->{chunk_dir}->chunks_info;
     my @clients = $self->clients;
@@ -266,7 +275,9 @@ sub gc {
     for my $info (@chunks_info) {
         my $lock = lockf($info->{lock_file}, { blocking => 0 }) or next;
         for my $client (@clients) {
-            my $lag = $client->lag($info->{id});
+            my $pos = $client->pos($info->{id});
+            my $size = -s $info->{file};
+            my $lag = $size - $pos;
             next CHUNK if not defined $lag;
             next CHUNK if $lag > 0;
         }

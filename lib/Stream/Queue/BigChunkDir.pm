@@ -7,6 +7,7 @@ use Stream::Formatter::LinedStorable;
 use Stream::File;
 use Yandex::Persistent;
 use Yandex::Logger;
+use Yandex::Lockf;
 use Params::Validate qw(:all);
 
 =head1 NAME
@@ -43,32 +44,59 @@ sub meta {
     return Yandex::Persistent->new("$self->{dir}/meta", { auto_commit => 0, format => 'json' });
 }
 
-sub out {
+sub meta_ro {
     my $self = shift;
-    {
-        package Stream::Queue::BigChunkFile;
-        use parent qw(Stream::File);
-        use Yandex::Lockf 3.0;
-        sub new {
-            my ($class, $dir, $id) = @_;
-            my $append_lock = lockf("$dir/$id.append_lock", { shared => 1, blocking => 0 });
-            die "Can't take append lock" if not $append_lock; # this exception should never happen - we already have meta lock at this moment
-            my $self = $class->SUPER::new("$dir/$id.chunk");
-            $self->{chunk_append_lock} = $append_lock;
-            return $self;
-        }
-    }
-    my $meta = $self->meta;
-    my $id = $meta->{id};
-    unless (defined $id) {
-        $id = 1;
+    my $file = "$self->{dir}/meta";
+    unless (-e $file) {
+        my $meta = $self->meta;
         $meta->{id} = 1;
         $meta->commit;
     }
-    my $file = "$self->{dir}/$id.chunk";
-    if (-e $file) {
-        my $size = -s $file; # file still exists, because we locked dir with meta
-        if ($size > $self->{max_chunk_size}) {
+    return Yandex::Persistent->new($file, { read_only => 1, format => 'json' });
+}
+
+{
+    package Stream::Queue::BigChunkFile;
+    use parent qw(Stream::File);
+    use Yandex::Lockf 3.0;
+    sub new {
+        my ($class, $dir, $id) = @_;
+        my $append_lock = lockf("$dir/$id.append_lock", { shared => 1, blocking => 0 });
+        die "Can't take append lock" if not $append_lock; # this exception should never happen - we already have meta lock at this moment
+        my $self = $class->SUPER::new("$dir/$id.chunk");
+        $self->{chunk_append_lock} = $append_lock;
+        return $self;
+    }
+}
+
+sub lock {
+    my $self = shift;
+    return lockf("$self->{dir}/out.lock");
+}
+
+sub out {
+    my $self = shift;
+    my $lock = lockf("$self->{dir}/out.lock", { shared => 1 }); # this lock guarantees that chunk will not be removed
+
+    my $meta = $self->meta_ro;
+
+    my ($id, $file);
+    my $trial = 0;
+    while (1) {
+        # we'll try twice:
+        # first time without global lock
+        # second time with globally locked meta object, in case first chunk is too big and somebody already created second chunk
+        $trial++;
+        $id = $meta->{id};
+        $file = "$self->{dir}/$id.chunk";
+        unless (-e $file and (-s $file) and (-s $file) > $self->{max_chunk_size}) {
+            last; # chunk looks ok
+        }
+
+        # chunk is too big, time for new chunk
+        $meta = $self->meta if $trial == 1; # upgrading to locked meta after first trial
+        if ($id == $meta->{id}) {
+            # we are the first one noticed that chunk is full
             my @chunk_files = glob "$self->{dir}/*.chunk";
             if (@chunk_files >= $self->{max_chunk_count}) {
                 die "Chunk count exceeded";
@@ -77,6 +105,13 @@ sub out {
             $meta->commit;
             INFO "New chunk $id";
             $file = "$self->{dir}/$id.chunk";
+        }
+        else {
+            # somebody already created new chunk
+            if ($trial > 1) {
+                die "Internal error, meta updated while locked";
+            }
+            next;
         }
     }
     my $out = Stream::Queue::BigChunkFile->new($self->{dir}, $id);

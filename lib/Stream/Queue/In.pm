@@ -51,7 +51,6 @@ sub new {
     }
     $self->{dir} = $self->{storage}->dir."/clients/$self->{client}";
     $self->{prev_chunks} = {};
-    $self->{lock} = lockf("$self->{dir}/lock", { shared => 1 });
     bless $self => $class;
     return $self;
 
@@ -61,12 +60,22 @@ sub new {
 
 Get metadata object.
 
-It's implemented as simple persistent, so it also works as global queue lock.
+It's implemented as simple persistent, so it also works as global exclusive queue lock.
 
 =cut
 sub meta {
     my $self = shift;
     return Yandex::Persistent->new("$self->{dir}/meta", { auto_commit => 0, format => 'json' });
+}
+
+=item B<< lock() >>
+
+Get shared lock. All rw operations should take it, so gc would not interfere with them.
+
+=cut
+sub lock {
+    my $self = shift;
+    return lockf("$self->{dir}/lock", { shared => 1 });
 }
 
 sub _next_id {
@@ -88,17 +97,23 @@ sub _chunk2id {
 sub _new_chunk {
     my $self = shift;
 
+    my $lock = $self->lock;
+
     my @chunks_info = $self->{storage}->chunks_info;
 
     my $data;
     my @ins;
+    my $chunk_size = 100;
     for my $info (@chunks_info) {
         my $in = Stream::Formatter::LinedStorable->wrap(Stream::File->new($info->{file}))->stream(
             Stream::File::Cursor->new("$self->{dir}/$info->{id}.pos")
         );
-        my $chunk_data = $in->read_chunk(100) or next;
+        my $portion_size = $chunk_size;
+        $portion_size -= @$data if $data;
+        my $portion_data = $in->read_chunk($portion_size) or next;
         push @ins, $in;
-        push @$data, @$chunk_data;
+        push @$data, @$portion_data;
+        last if @$data >= $chunk_size;
     }
     return unless $data;
     my $new_id = $self->_next_id;
@@ -197,7 +212,8 @@ Cleanup lost files.
 =cut
 sub gc {
     my $self = shift;
-    my $lock = lockf($self->{lock}->file);
+    my $lock = $self->lock;
+    $lock->unshare;
     opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";
     while (my $file = readdir $dh) {
         next if $file eq '.';
@@ -240,7 +256,7 @@ sub gc {
     closedir $dh or die "Can't close '$self->{dir}': $!";
 }
 
-sub lag {
+sub pos {
     my ($self, $id) = @_;
     my $cursor_file = "$self->{dir}/$id.pos";
     unless (-e $cursor_file) {

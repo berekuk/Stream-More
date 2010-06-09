@@ -58,6 +58,7 @@ sub bench {
 
     my $total = 1000;
     my $portion = 100;
+    my $queue;
     my $bench_write = sub {
         my $parallel = shift;
         bench({
@@ -65,7 +66,7 @@ sub bench {
             parallel => $parallel,
             total => $total,
             code => sub {
-                my $queue = Stream::Queue->new({ dir => 'tfiles/queue' });
+                $queue ||= Stream::Queue->new({ dir => 'tfiles/queue' });
                 for (1..$portion) {
                     $queue->write({ id => $_ });
                 }

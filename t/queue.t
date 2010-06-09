@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 6;
+use Test::More tests => 8;
 
 use lib 'lib';
 
@@ -187,16 +187,17 @@ sub read_n {
     PPB::Test::TFiles::import();
     my $queue = Stream::Queue->new({
         dir => 'tfiles',
-        max_chunk_size => 100,
+        max_chunk_size => 10,
         max_chunk_count => 1000,
     });
 
     my $write = sub {
-        $queue->write([ 1..100 ]);
+        my $id = shift;
+        $queue->write([ "$id" => [ 1..10 ] ]);
         $queue->commit;
     };
 
-    $write->() for 1..100;
+    $write->($_) for 1..100;
 
     my $first_in = $queue->stream('first');
     my $second_in = $queue->stream('second');
