@@ -13,11 +13,9 @@ Stream::Simple - simple procedural-style constructors of streams without any pos
 
     use Stream::Simple;
 
-    $stream = array_seq([5,6,7]);
+    $in = array_in([5,6,7]);
 
-=head1 DESCRIPTION
-
-This package is an adaptation of PPB::Join::Sequence::* modules.
+    $out = code_out(sub { print shift });
 
 =head1 FUNCTIONS
 
@@ -26,46 +24,45 @@ This package is an adaptation of PPB::Join::Sequence::* modules.
 =cut
 
 use base qw(Exporter);
-our @EXPORT_OK = qw/ array_seq /;
+our @EXPORT_OK = qw/ array_seq array_in code_out /;
 
+use Carp;
+use Stream::Simple::ArrayIn;
+use Stream::Simple::CodeOut;
 use Params::Validate qw(:all);
 
-=item B<array_seq($list)>
+=item B<array_in($list)>
 
 Creates stream which shifts items from specified list and returns them as stream values.
 
 =cut
-sub array_seq($) {
+sub array_in($) {
     my ($list) = validate_pos(@_, { type => ARRAYREF });
-    return Stream::Simple::Array->new($list);
+    return Stream::Simple::ArrayIn->new($list);
+}
+
+=item B<array_seq($list)>
+
+Obsolete alias for C<array_in()>. C<_seq> postfixes are reserved for C<PPB::Join> objects or at least for sorted sequences.
+
+=cut
+*array_seq = \&array_in;
+
+=item B<< code_out($coderef) >>
+
+Creates anonymous output stream which calls specified callback on every C<write> call.
+
+This is just another version of C<processor()> from C<Stream::Out>. I think C<processor()> will become deprecated someday, just to keep stream base classes clean and to make C<Stream::Simple> consistent and complete collection of common procedural-style stream builders.
+
+=cut
+sub code_out(&) {
+    my ($callback) = @_;
+    croak "Expected callback" unless ref($callback) eq 'CODE';
+    # alternative constructor
+    return Stream::Simple::CodeOut->new($callback);
 }
 
 =back
-
-=cut
-
-package Stream::Simple::Array;
-
-use strict;
-use warnings;
-
-use Params::Validate qw(:all);
-use base qw(Stream::Stream Stream::Mixin::Shift);
-
-sub new {
-    my $class = shift;
-    my ($list) = validate_pos(@_, { type => ARRAYREF });
-    return bless [$list] => $class;
-}
-
-sub read {
-    return shift @{$_[0][0]};
-}
-
-sub read_chunk {
-    my @c = splice @{$_[0][0]}, 0, $_[1] or return;
-    return \@c;
-}
 
 =head1 AUTHOR
 
