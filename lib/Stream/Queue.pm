@@ -104,43 +104,6 @@ sub new {
     return $self;
 }
 
-=item B<< meta() >>
-
-Get metadata object.
-
-It's implemented as simple persistent, so it also works as global queue lock.
-
-=cut
-sub meta {
-    my $self = shift;
-    return Yandex::Persistent->new("$self->{dir}/queue.meta", { auto_commit => 0, format => 'json' });
-}
-
-=item B<< format() >>
-
-Get queue's internal format.
-
-=cut
-sub format {
-    my $self = shift;
-    return $self->{format};
-}
-
-=item B<< dir() >>
-
-Get queue's dir.
-
-=cut
-sub dir {
-    my $self = shift;
-    return $self->{dir};
-}
-
-sub chunks_info {
-    my $self = shift;
-    return $self->{chunk_dir}->chunks_info;
-}
-
 =item B<< write($item) >>
 
 Write new item into queue.
@@ -220,6 +183,75 @@ sub has_client {
     return 1;
 }
 
+sub stream {
+    my $self = shift;
+    my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
+
+    unless ($self->has_client($client)) {
+        unless ($self->{autoregister}) {
+            croak "Client $client not found and autoregister is disabled";
+        }
+        $self->register_client($client);
+    }
+    return Stream::Queue::In->new({
+        storage => $self,
+        client => $client,
+    });
+}
+
+sub class_caps {
+    { persistent => 1 }
+}
+
+
+=over
+
+=head1 INTERNAL METHODS
+
+These methods are not a part of public API and are used only by C<Stream::Queue::*> modules.
+
+=item B<< meta() >>
+
+Get metadata object.
+
+It's implemented as simple persistent, so it also works as global queue lock.
+
+=cut
+sub meta {
+    my $self = shift;
+    return Yandex::Persistent->new("$self->{dir}/queue.meta", { auto_commit => 0, format => 'json' });
+}
+
+=item B<< format() >>
+
+Get queue's internal format.
+
+=cut
+sub format {
+    my $self = shift;
+    return $self->{format};
+}
+
+=item B<< dir() >>
+
+Get queue's dir.
+
+=cut
+sub dir {
+    my $self = shift;
+    return $self->{dir};
+}
+
+=item B<< chunks_info() >>
+
+Proxy method for chunks_info() method from C<Stream::Queue::BigChunkDir>.
+
+=cut
+sub chunks_info {
+    my $self = shift;
+    return $self->{chunk_dir}->chunks_info;
+}
+
 =item B<< clients() >>
 
 Get all storage clients as plain list.
@@ -289,26 +321,6 @@ sub gc {
     for (@clients) {
         $_->gc();
     }
-}
-
-sub stream {
-    my $self = shift;
-    my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
-
-    unless ($self->has_client($client)) {
-        unless ($self->{autoregister}) {
-            croak "Client $client not found and autoregister is disabled";
-        }
-        $self->register_client($client);
-    }
-    return Stream::Queue::In->new({
-        storage => $self,
-        client => $client,
-    });
-}
-
-sub class_caps {
-    { persistent => 1 }
 }
 
 =back

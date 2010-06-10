@@ -256,6 +256,11 @@ sub gc {
     closedir $dh or die "Can't close '$self->{dir}': $!";
 }
 
+=item C<< pos($id) >>
+
+Get position in bytes for given chunk id.
+
+=cut
 sub pos {
     my ($self, $id) = @_;
     my $cursor_file = "$self->{dir}/$id.pos";
