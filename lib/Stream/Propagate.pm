@@ -137,6 +137,8 @@ sub commit {
     delete $self->{buffer};
 }
 
+=back
+
 =head1 AUTHOR
 
 Vyacheslav Matjukhin <mmcleric@yandex-team.ru>
