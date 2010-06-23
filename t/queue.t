@@ -217,5 +217,5 @@ sub read_n {
 
     cmp_ok($calc_count->(), '>', 200);
     $queue->gc;
-    cmp_ok($calc_count->(), '<', 20);
+    cmp_ok($calc_count->(), '<', 30);
 }

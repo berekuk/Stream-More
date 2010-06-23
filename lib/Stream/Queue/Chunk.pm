@@ -5,6 +5,16 @@ use warnings;
 
 use parent qw(Stream::In);
 
+=head1 NAME
+
+Stream::Queue::Chunk - represents one client chunk
+
+=head1 METHODS
+
+=over
+
+=cut
+
 use Yandex::X;
 use Yandex::Lockf 3.0.0;
 use Stream::Formatter::LinedStorable;
@@ -25,9 +35,15 @@ sub new {
     return $class->load($dir, $id);
 }
 
+=item B<< load($dir, $id) >>
+
+Construct chunk object corresponding to existing chunk.
+
+=cut
 sub load {
     my ($class, $dir, $id) = validate_pos(@_, 1, { type => SCALAR }, { type => SCALAR, regex => qr/^\d+$/ });
 
+    return unless -e "$dir/$id.chunk"; # this check is unnecessary, but it reduces number of fanthom lock files
     my $lock = lockf("$dir/$id.lock", { blocking => 0 }) or return;
     return unless -e "$dir/$id.chunk";
 
@@ -53,18 +69,31 @@ sub commit {
     return $self->{in}->commit;
 }
 
+=item B<< id() >>
+
+Get chunk id.
+
+=cut
 sub id {
     my $self = shift;
     return $self->{id};
 }
 
+=item B<< remove() >>
+
+Remove chunk and all related files.
+
+=cut
 sub remove {
     my $self = shift;
     my $prefix = "$self->{dir}/$self->{id}";
     xunlink("$prefix.chunk");
     xunlink("$prefix.status");
+    xunlink("$prefix.status.lock") if -e "$prefix.status.lock";
     xunlink("$prefix.lock");
 }
+
+=back
 
 =head1 AUTHOR
 

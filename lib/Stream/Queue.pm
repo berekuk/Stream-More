@@ -203,12 +203,13 @@ sub class_caps {
     { persistent => 1 }
 }
 
-
-=over
+=back
 
 =head1 INTERNAL METHODS
 
 These methods are not a part of public API and are used only by C<Stream::Queue::*> modules.
+
+=over
 
 =item B<< meta() >>
 

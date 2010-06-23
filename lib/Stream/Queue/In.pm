@@ -132,6 +132,8 @@ sub _next_chunk {
             return; # chunk already processed in this process
         }
 
+        # this line can create lock file for already removed chunk, which will be removed only at next gc()
+        # TODO - think how we can fix it
         my $chunk = Stream::Queue::Chunk->load($self->{dir}, $id) or return;
 
         DEBUG "[$self->{client}] Reading $chunk_name";
@@ -219,6 +221,7 @@ sub gc {
         next if $file eq '.';
         next if $file eq '..';
         next if $file =~ /(^meta|^lock$)/;
+        next if $file =~ /^\d+\.chunk$/;
         my $unlink = sub {
             xunlink("$self->{dir}/$file");
         };
@@ -235,10 +238,22 @@ sub gc {
                 DEBUG "[$self->{client}] Lost status file $file for $id client chunk removed";
             }
         }
+        elsif (($id) = $file =~ /^(\d+)\.status.lock$/) {
+            unless (-e "$self->{dir}/$id.chunk") {
+                $unlink->();
+                DEBUG "[$self->{client}] Lost status lock file $file for $id client chunk removed";
+            }
+        }
         elsif (($id) = $file =~ /^(\d+)\.pos$/) {
             unless (-e $self->{storage}->dir."/$id.chunk") {
                 $unlink->();
                 DEBUG "[$self->{client}] Lost pos file $file for $id chunk removed";
+            }
+        }
+        elsif (($id) = $file =~ /^(\d+)\.pos.lock$/) {
+            unless (-e $self->{storage}->dir."/$id.chunk") {
+                $unlink->();
+                DEBUG "[$self->{client}] Lost pos lock file $file for $id chunk removed";
             }
         }
         elsif ($file =~ /^(\d+)\.chunk.new$/) {
@@ -249,8 +264,7 @@ sub gc {
             }
         }
         else {
-            $unlink->();
-            WARN "[$self->{client}] Unknown file $file removed";
+            WARN "[$self->{client}] Unknown file $file";
         }
     }
     closedir $dh or die "Can't close '$self->{dir}': $!";

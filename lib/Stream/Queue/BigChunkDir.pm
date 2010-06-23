@@ -20,8 +20,13 @@ This class is for keeping main queue chunks.
 
 Client-specific chunks are not maintained by this class (yet).
 
-=cut
+=over
 
+=item B<< new($params) >>
+
+Constructor.
+
+=cut
 sub new {
     my $class = shift;
     my $params = validate(@_, {
@@ -44,6 +49,11 @@ sub meta {
     return Yandex::Persistent->new("$self->{dir}/meta", { auto_commit => 0, format => 'json' });
 }
 
+=item B<< meta_ro() >>
+
+Get read-only version of metadata object.
+
+=cut
 sub meta_ro {
     my $self = shift;
     my $file = "$self->{dir}/meta";
@@ -59,7 +69,7 @@ sub meta_ro {
     package Stream::Queue::BigChunkFile;
     use parent qw(Stream::File);
     use Yandex::Lockf 3.0;
-    sub new {
+    sub _new {
         my ($class, $dir, $id) = @_;
         my $append_lock = lockf("$dir/$id.append_lock", { shared => 1, blocking => 0 });
         die "Can't take append lock" if not $append_lock; # this exception should never happen - we already have meta lock at this moment
@@ -69,11 +79,23 @@ sub meta_ro {
     }
 }
 
+=item B<< lock() >>
+
+Global lock.
+
+Returns C<Yandex::Lockf> instance.
+
+=cut
 sub lock {
     my $self = shift;
     return lockf("$self->{dir}/out.lock");
 }
 
+=item B<< out() >>
+
+Returns output stream directed into some new or existing chunk, depending on whether last chunk in queue is already full.
+
+=cut
 sub out {
     my $self = shift;
     my $lock = lockf("$self->{dir}/out.lock", { shared => 1 }); # this lock guarantees that chunk will not be removed
@@ -114,10 +136,15 @@ sub out {
             next;
         }
     }
-    my $out = Stream::Queue::BigChunkFile->new($self->{dir}, $id);
+    my $out = Stream::Queue::BigChunkFile->_new($self->{dir}, $id);
     return Stream::Formatter::LinedStorable->wrap($out);
 }
 
+=item B<< chunks_info() >>
+
+Get info about all chunks in dir.
+
+=cut
 sub chunks_info {
     my $self = shift;
     my @files =  glob "$self->{dir}/*.chunk";
@@ -129,6 +156,8 @@ sub chunks_info {
     }
     return @result;
 }
+
+=back
 
 =head1 AUTHOR
 
