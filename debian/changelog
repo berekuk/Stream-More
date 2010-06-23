@@ -1,8 +1,5 @@
 libstream-more-perl (0.5.1) UNRELEASED; urgency=low
 
-!THIS VERSION IS NOT READY TO BE RELEASED UNTIL queue-improvements branch is
-stable, sorry!
-
   * Stream::Queue improvements
    - permanent data is keeped in log, chunks created per-client on depand
    - gc() method instead of old clean_ids(), called only from time to time

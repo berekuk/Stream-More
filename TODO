@@ -2,4 +2,3 @@ Stream::Queue:
 - improve client parallelism - variable chunk sizes
 - improve write parallelism - writing into several chunks
 - lock chunks when reading
-- migrate from old format
