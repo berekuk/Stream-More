@@ -100,6 +100,7 @@ sub new {
         max_chunk_count => $self->{max_chunk_count},
     });
     bless $self => $class;
+    $self->try_convert;
     $self->try_gc;
     return $self;
 }
@@ -287,6 +288,91 @@ sub try_gc {
         $meta->commit;
         $self->gc($meta);
     }
+}
+
+=item B<< try_convert() >>
+
+Check if queue is in old format and needs to be converted.
+
+=cut
+sub try_convert {
+    my $self = shift;
+
+    my $meta = $self->meta;
+    my $cd_meta = $self->{chunk_dir}->meta;
+    if ($cd_meta->{id}) {
+        if (not defined $meta->{version}) {
+            undef $cd_meta;
+            $self->convert($meta);
+        }
+    }
+    else {
+        # new queue
+        $meta->{version} = 1;
+        $meta->commit;
+    }
+    if ($meta->{version} != 1) {
+        croak "Unknown queue version '$meta->{version}'";
+    }
+}
+
+=item B<< convert() >>
+
+Convert queue from old format. All client positions will be lost, sorry.
+
+=cut
+sub convert {
+    my ($self, $meta) = @_;
+    INFO "Converting from old format";
+
+    if (-d "$self->{dir}/convert") {
+        WARN "convert dir already exists, previous convert probably failed";
+    }
+    else {
+        xmkdir("$self->{dir}/convert");
+        xsystem("mv $self->{dir}/*.chunk $self->{dir}/convert/");
+    }
+
+    my @chunks = glob "$self->{dir}/convert/*.chunk";
+    my $converted = Stream::Formatter::LinedStorable->wrap(Stream::File->new("$self->{dir}/convert/converted.chunk"));
+    my $filter = Stream::Formatter::LinedStorable->new->read_filter();
+    for my $file (@chunks) {
+        next unless $file =~ /\d+.chunk$/;
+        INFO "Converting $file";
+        my $fh = xopen('<', $file);
+        my $mixed_flag;
+        while (1) {
+            my $item;
+            if ($mixed_flag) {
+                $item = $filter->write($fh->getline);
+            }
+            else {
+                use Storable qw(fd_retrieve);
+                my $pos = tell $fh;
+                $item = eval { fd_retrieve($fh) };
+                if ($@) {
+                    WARN "error: $@, probably new-format lines follow";
+                    seek $fh, $pos, 0;
+                    $mixed_flag = 1;
+                }
+            }
+            $converted->write($item);
+            last if $fh->eof;
+        }
+    }
+    $converted->commit;
+    xrename("$self->{dir}/convert/converted.chunk" => "$self->{dir}/1.chunk");
+    xsystem("rm -rf $self->{dir}/converted");
+    xsystem("rm -f $self->{dir}/clients/*/status");
+    xsystem("rm -f $self->{dir}/clients/*/status.lock");
+
+    $meta->{version} = 1;
+    $meta->commit;
+
+    my $cd_meta = $self->{chunk_dir}->meta;
+    $cd_meta->{id} = 1;
+    $cd_meta->commit;
+    INFO "Converted successfully";
 }
 
 =item B<< gc() >>

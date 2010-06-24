@@ -279,7 +279,7 @@ sub pos {
     my ($self, $id) = @_;
     my $cursor_file = "$self->{dir}/$id.pos";
     unless (-e $cursor_file) {
-        return;
+        return 0;
     }
     my $cursor = Stream::File::Cursor->new($cursor_file);
     return $cursor->position;
