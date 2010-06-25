@@ -362,7 +362,7 @@ sub convert {
     }
     $converted->commit;
     xrename("$self->{dir}/convert/converted.chunk" => "$self->{dir}/1.chunk");
-    xsystem("rm -rf $self->{dir}/converted");
+    xsystem("rm -rf $self->{dir}/convert");
     xsystem("rm -f $self->{dir}/clients/*/status");
     xsystem("rm -f $self->{dir}/clients/*/status.lock");
 
