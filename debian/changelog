@@ -1,3 +1,10 @@
+libstream-more-perl (0.6.3) unstable; urgency=low
+
+  * one more convert() fix
+  * and one more
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Fri, 25 Jun 2010 17:55:28 +0400
+
 libstream-more-perl (0.6.2) unstable; urgency=low
 
   * typo fix

@@ -355,13 +355,16 @@ sub convert {
                     seek $fh, $pos, 0;
                     $mixed_flag = 1;
                 }
+                $item = $$item;
             }
             $converted->write($item);
             last if $fh->eof;
         }
     }
     $converted->commit;
-    xrename("$self->{dir}/convert/converted.chunk" => "$self->{dir}/1.chunk");
+    if (-e "$self->{dir}/convert/converted.chunk") {
+        xrename("$self->{dir}/convert/converted.chunk" => "$self->{dir}/1.chunk");
+    }
     xsystem("rm -rf $self->{dir}/convert");
     xsystem("rm -f $self->{dir}/clients/*/status");
     xsystem("rm -f $self->{dir}/clients/*/status.lock");
@@ -401,8 +404,8 @@ sub gc {
             next CHUNK if $lag > 0;
         }
         # chunk can be safely removed
+        xunlink($info->{lock_file}) if -e $info->{lock_file}; # theoretically, previous gc could fail after this unlink and before unlinking chunk itself
         xunlink($info->{file});
-        xunlink($info->{lock_file});
     }
 
     for (@clients) {
