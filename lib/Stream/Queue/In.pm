@@ -51,6 +51,7 @@ sub new {
     }
     $self->{dir} = $self->{storage}->dir."/clients/$self->{client}";
     $self->{prev_chunks} = {};
+    $self->{uncommited} = 0;
     bless $self => $class;
     return $self;
 
@@ -103,7 +104,7 @@ sub _new_chunk {
 
     my $data;
     my @ins;
-    my $chunk_size = 100;
+    my $chunk_size = $self->{uncommited} + 1;
     for my $info (@chunks_info) {
         my $in = Stream::Formatter::LinedStorable->wrap(Stream::File->new($info->{file}))->stream(
             Stream::File::Cursor->new("$self->{dir}/$info->{id}.pos")
@@ -181,6 +182,7 @@ sub read {
             delete $self->{chunk};
             next;
         }
+        $self->{uncommited}++;
         return $item;
     }
 }
@@ -203,6 +205,7 @@ sub commit {
 
     $_->remove for values %{ $self->{prev_chunks} };
     $self->{prev_chunks} = {};
+    $self->{uncommited} = 0;
 
     return;
 }

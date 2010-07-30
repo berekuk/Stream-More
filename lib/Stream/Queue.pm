@@ -79,7 +79,7 @@ sub new {
         format => { default => 'storable' },
         autoregister => { default => 1 },
         gc_period => { default => 300 },
-        max_chunk_size => { default => 100 * 1024 * 1024, regex => qr/^\d+$/ },
+        max_chunk_size => { default => 50 * 1024 * 1024, regex => qr/^\d+$/ },
         max_chunk_count => { default => 100, regex => qr/^\d+$/ },
     });
     unless ($self->{format} eq 'storable') {

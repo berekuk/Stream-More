@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 3;
+use Test::More tests => 4;
 use lib 'lib';
 
 use PPB::Test::TFiles;
@@ -172,4 +172,50 @@ sub bench {
     diag("reading ".($baseline * $portion * 4 / 1000)."k items: $quadro_time");
 
     cmp_ok($quadro_time / $time, '<', 5, 'read scales good enough');
+}
+
+{
+
+    my $portion = 1000;
+    my $bench_read = sub {
+        my $commit_count = shift;
+        bench({
+            forks => 3,
+            parallel => 3,
+            total => $commit_count * 2,
+            setup => sub {
+                PPB::Test::TFiles::import;
+                my $queue = Stream::Queue->new({ dir => 'tfiles/queue' });
+                $queue->register_client('client');
+                undef $queue;
+
+                $queue = Stream::Queue->new({ dir => 'tfiles/queue' });
+                for (1..$commit_count) {
+                    for (1..$portion) {
+                        $queue->write({ id => $_ });
+                    }
+                    $queue->commit;
+                }
+            },
+            code => sub {
+                my $queue = Stream::Queue->new({ dir => 'tfiles/queue' });
+                my $client = $queue->stream('client');
+                for (1..$portion) {
+                    $client->read();
+                }
+                $client->commit;
+            },
+        });
+    };
+
+    my $baseline = 10;
+    my $time = $bench_read->($baseline);
+    my $double_time = $bench_read->(2 * $baseline);
+    my $quadro_time = $bench_read->(4 * $baseline);
+
+    diag("reading ".($baseline * $portion / 1000)."k items in large portions: $time");
+    diag("reading ".($baseline * $portion * 2 / 1000)."k items in large portions: $double_time");
+    diag("reading ".($baseline * $portion * 4 / 1000)."k items in large portions: $quadro_time");
+
+    cmp_ok($quadro_time / $time, '<', 5, 'read in large portions scales good enough');
 }

@@ -1,3 +1,11 @@
+libstream-more-perl (0.6.4) unstable; urgency=low
+
+  * Stream::Queue:
+   - adaptive client chunk sizes
+   - limit default queue size to 5 GB instead of 10
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Fri, 30 Jul 2010 17:07:50 +0400
+
 libstream-more-perl (0.6.3) unstable; urgency=low
 
   * one more convert() fix
