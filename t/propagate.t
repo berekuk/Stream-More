@@ -31,8 +31,8 @@ use Stream::Propagate;
 
     is_deeply(\%uri2contents, {
         'http://accept.stream.com:1248/write?name=blah&format=json' => [
-        q({"data":"abc"}
-{"data":{"y":6,"x":5}}
+        q({"data2":"abc"}
+{"data2":{"y":6,"x":5}}
 ) # TODO - replace exact matching with regex since x/y order is unpredictable
         ]}, 'commit commits, default format is json');
     $mock_ua->unmap($map_id);
