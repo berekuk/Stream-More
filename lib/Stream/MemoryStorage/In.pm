@@ -5,6 +5,7 @@ use warnings;
 
 use namespace::autoclean;
 use Params::Validate qw(:all);
+use parent qw(Stream::In);
 
 sub new {
     my $class = shift;
