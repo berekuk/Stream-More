@@ -3,15 +3,19 @@
 use strict;
 use warnings;
 
-use Test::More tests => 11;
-use Test::Exception;
+use lib 't/lib';
+use lib 'lib';
 
-use lib qw(lib);
+use parent qw(Test::Class);
+use Stream::Test::Storage;
+
+use Test::More;
+use Test::Exception;
 
 use Stream::Simple qw(array_in code_out);
 
 # array_in - read (5)
-{
+sub array_in_read :Test(5) {
     my $s = array_in([5,6,7,8]);
     ok($s->isa('Stream::In'), 'array_in is a stream');
     is(scalar($s->read), 5, 'read returns first array element');
@@ -21,8 +25,7 @@ use Stream::Simple qw(array_in code_out);
     is(scalar($s->read), undef, 'last read return undef');
 }
 
-# array_in - read_chunk (3)
-{
+sub array_in_read_chunk :Test(4) {
     my $s = array_in([5,6,7]);
     is_deeply($s->read_chunk(2), [5,6], 'read_chunk works too');
     is_deeply($s->read_chunk(2), [7], 'second read_chunk returns remaining elements');
@@ -30,8 +33,7 @@ use Stream::Simple qw(array_in code_out);
     $s->commit; # does nothing, but shouldn't fail
 }
 
-# code_out (3)
-{
+sub code_out_test :Test(3) {
     my @data_in = ('a', 5, { x => 'y' });
     my @data_out;
 
@@ -45,4 +47,6 @@ use Stream::Simple qw(array_in code_out);
     $p->commit;
     is_deeply(\@data_out, \@data_in, 'code_out result works as anonymous output stream');
 }
+
+Test::Class->runtests( __PACKAGE__->new );
 

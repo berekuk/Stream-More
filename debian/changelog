@@ -1,3 +1,10 @@
+libstream-more-perl (0.6.6) UNRELEASED; urgency=low
+
+  * Stream::MemoryStorage implemented
+  * several Test::Class-based Stream::Test::* modules
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Mon, 16 Aug 2010 18:15:17 +0400
+
 libstream-more-perl (0.6.5) unstable; urgency=low
 
   * Stream::Formatter::JSON: don't quote json twice; key renamed to 'data2' to

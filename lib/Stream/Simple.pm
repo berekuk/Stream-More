@@ -7,7 +7,7 @@ use Yandex::Version '{{DEBIAN_VERSION}}';
 
 =head1 NAME
 
-Stream::Simple - simple procedural-style constructors of streams without any positions
+Stream::Simple - simple procedural-style constructors of some streams
 
 =head1 SYNOPSIS
 
@@ -24,10 +24,11 @@ Stream::Simple - simple procedural-style constructors of streams without any pos
 =cut
 
 use base qw(Exporter);
-our @EXPORT_OK = qw/ array_seq array_in code_out /;
+our @EXPORT_OK = qw/ array_seq array_in code_out memory_storage /;
 
 use Carp;
 use Stream::Simple::ArrayIn;
+use Stream::MemoryStorage;
 use Stream::Simple::CodeOut;
 use Params::Validate qw(:all);
 
@@ -60,6 +61,15 @@ sub code_out(&) {
     croak "Expected callback" unless ref($callback) eq 'CODE';
     # alternative constructor
     return Stream::Simple::CodeOut->new($callback);
+}
+
+=item B<< memory_storage() >>
+
+Construct new in-memory storage, i.e. instance of L<Stream::MemoryStorage>.
+
+=cut
+sub memory_storage($) {
+    return Stream::MemoryStorage->new();
 }
 
 =back

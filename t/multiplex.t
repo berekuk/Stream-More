@@ -3,9 +3,12 @@
 use strict;
 use warnings;
 
-use Test::More tests => 3;
+use parent qw(Test::Class);
+use Test::More;
 
 use lib 'lib';
+use lib 't/lib';
+use Stream::Test::Storage;
 
 use Stream::Out::Multiplex;
 use Stream::Simple qw(array_seq);
@@ -15,17 +18,31 @@ my @v1;
 my @v2;
 my @v3;
 
-process(
-    array_seq([ 2, 3, 4 ])
-    =>
+sub test :Test(3) {
+    process(
+        array_seq([ 2, 3, 4 ])
+        =>
+        Stream::Out::Multiplex->new([
+            processor(sub { push @v1, shift() }),
+            processor(sub { push @v2, shift() * 2 }),
+            processor(sub { push @v3, shift() ** 2 }),
+        ])
+    );
+
+    is_deeply(\@v1, [2,3,4], 'first target stream');
+    is_deeply(\@v2, [4,6,8], 'second target stream');
+    is_deeply(\@v3, [4,9,16], 'third target stream');
+}
+
+my $common_test = Stream::Test::Storage->new(sub {
     Stream::Out::Multiplex->new([
         processor(sub { push @v1, shift() }),
-        processor(sub { push @v2, shift() * 2 }),
-        processor(sub { push @v3, shift() ** 2 }),
+        processor(sub { push @v2, shift() x 2 }),
+        processor(sub { push @v3, shift() x 3 }),
     ])
-);
+});
 
-is_deeply(\@v1, [2,3,4], 'first target stream');
-is_deeply(\@v2, [4,6,8], 'second target stream');
-is_deeply(\@v3, [4,9,16], 'third target stream');
+Test::Class->runtests(
+    __PACKAGE__->new, $common_test
+);
 
