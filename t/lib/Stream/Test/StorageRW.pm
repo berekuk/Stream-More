@@ -22,7 +22,7 @@ Since we want this class to be useful both for storages supporting named clients
 
 =over
 
-=item B<< new($storage_gen, $client_gen) >>
+=item B<< new($storage_gen, $cursor_gen) >>
 
 Constructor parameters:
 
@@ -32,18 +32,18 @@ Constructor parameters:
 
 Coderef which returns newly constructed storage when called.
 
-=item I<$client_gen>
+=item I<$cursor_gen>
 
-Coderef which returns newly constructed client when called with storage as argument.
+Coderef which generates new argument appropriate for C<< $storage->stream($cursor) >> call. By default, it's trivial C<< sub { shift } >>, which works fine for storages which support named clients.
 
 =cut
 
 sub new {
     my $class = shift;
-    my ($storage_gen, $client_gen) = validate_pos(@_, { type => CODEREF }, { type => CODEREF } );
+    my ($storage_gen, $cursor_gen) = validate_pos(@_, { type => CODEREF }, { type => CODEREF, default => sub { shift } } );
     my $self = $class->SUPER::new;
     $self->{storage_gen} = $storage_gen;
-    $self->{client_gen} = $client_gen;
+    $self->{cursor_gen} = $cursor_gen;
     return $self;
 }
 
@@ -62,17 +62,31 @@ sub storage {
     return $self->{storage};
 }
 
-sub new_client {
+sub stream {
     my $self = shift;
-    return $self->{client_gen}->($self->storage);
+    return $self->storage->stream($self->{cursor_gen}->(shift));
 }
 
 sub client_is_input_stream :Test(1) {
     my $self = shift;
-    ok($self->new_client($self->storage)->isa('Stream::In'));
+    ok($self->stream('abc')->isa('Stream::In'));
 }
 
-sub simple_read_write :Test(6) {
+sub simple_read_write :Test(3) {
+    my $self = shift;
+    my $storage = $self->{storage};
+    $storage->write(123);
+    $storage->write('abc');
+    $storage->commit;
+
+    my $in = $self->stream('blah');
+    is($in->read, 123);
+    is($in->read, 'abc');
+    is($in->read, undef);
+    $in->commit;
+}
+
+sub two_clients :Test(3) {
     my $self = shift;
     my $storage = $self->{storage};
     $storage->write(123);
@@ -80,20 +94,16 @@ sub simple_read_write :Test(6) {
     $storage->commit;
 
     {
-        my $client = $self->new_client;
-        is($client->read, 123);
-        is($client->read, 'abc');
-        is($client->read, undef);
-        $client->commit;
+        my $in = $self->stream('blah');
+        $in->read;
+        $in->commit;
     }
 
-    {
-        my $client = $self->new_client;
-        is($client->read, 123);
-        $client->commit;
-        is($client->read, 'abc');
-        is($client->read, undef);
-    }
+    my $in = $self->stream('blah');
+    my $in2 = $self->stream('blah2');
+    is($in->read, 'abc');
+    is($in2->read, 123);
+    is($in2->read, 'abc');
 }
 
 =head1 AUTHOR

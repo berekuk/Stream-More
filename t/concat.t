@@ -13,7 +13,7 @@ use Stream::Test::StorageRW;
 use Stream::Concat;
 use Stream::MemoryStorage;
 
-sub test_concat :Test(...) {
+sub test_concat :Tests {
     my $old = Stream::MemoryStorage->new;
     my $new = Stream::MemoryStorage->new;
 
@@ -22,6 +22,7 @@ sub test_concat :Test(...) {
     my $old_client = $old->stream('abc');
     $old_client->read;
     $old_client->commit;
+    undef $old_client;
 
     $new->write('new1');
     $new->write('new2');
@@ -56,17 +57,12 @@ my $common_test = Stream::Test::Out->new(
     },
 );
 
-my $i = 0;
 my $rw_test = Stream::Test::StorageRW->new(
     sub {
         Stream::Concat->new(
             Stream::MemoryStorage->new() => Stream::MemoryStorage->new()
         );
-    },
-    sub {
-        $i++;
-        return shift()->stream("client$i");
-    },
+    }
 );
 
 Test::Class->runtests(

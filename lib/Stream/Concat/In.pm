@@ -42,6 +42,12 @@ sub read_chunk {
     return $self->{new}->read_chunk(@_);
 }
 
+sub commit {
+    my $self = shift;
+    $self->{old}->commit;
+    $self->{new}->commit;
+}
+
 =head1 SEE ALSO
 
 You are probably looking for L<Stream::Concat::Storage>.

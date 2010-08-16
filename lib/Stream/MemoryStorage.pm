@@ -10,6 +10,7 @@ Stream::MemoryStorage - in-memory storage with support for named clients
 =cut
 
 use parent qw(Stream::Storage);
+use Streams 0.9.0 qw();
 use parent qw(Stream::Storage::Role::ClientList);
 
 use namespace::autoclean;
@@ -87,7 +88,7 @@ sub unregister_client {
 
 sub stream {
     my $self = shift;
-    my $client = validate_pos(@_, { type => SCALAR });
+    my ($client) = validate_pos(@_, { type => SCALAR });
     unless ($self->_lock_client($client)) {
         croak "Constructing two clients with same name '$client' for one MemoryStorage - not implemented yet";
     }
