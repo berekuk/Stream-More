@@ -26,6 +26,11 @@ sub teardown :Test(teardown) {
     delete $self->{storage};
 }
 
+sub is_stream_storage :Test(1) {
+    my $self = shift;
+    ok($self->{storage}->isa('Stream::Storage'));
+}
+
 sub write_scalar :Test(1) {
     my $self = shift;
     $self->{storage}->write('abc');

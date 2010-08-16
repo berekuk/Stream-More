@@ -16,7 +16,25 @@ Stream::Test::StorageRW - test storage rw capabilities
 
 =head1 DESCRIPTION
 
-Since we want this class to be useful both for storages supporting named clients, and for storages supporting cursor-style input streams only, constructor arguments are pretty complex. Sorry.
+Since we want this class to be useful both for storages supporting named clients, and for storages supporting cursor-style input streams only, constructor arguments are pretty complex.
+
+=head1 METHODS
+
+=over
+
+=item B<< new($storage_gen, $client_gen) >>
+
+Constructor parameters:
+
+=over
+
+=item I<$storage_gen>
+
+Coderef which returns newly constructed storage when called.
+
+=item I<$client_gen>
+
+Coderef which returns newly constructed client when called with storage as argument.
 
 =cut
 
@@ -47,6 +65,11 @@ sub storage {
 sub new_client {
     my $self = shift;
     return $self->{client_gen}->($self->storage);
+}
+
+sub client_is_input_stream :Test(1) {
+    my $self = shift;
+    ok($self->new_client($self->storage)->isa('Stream::In'));
 }
 
 sub simple_read_write :Test(6) {
