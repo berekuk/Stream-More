@@ -8,13 +8,13 @@ use Test::More;
 use lib 'lib';
 use lib 't/lib';
 use Test::Class;
-use Stream::Test::Storage;
+use Stream::Test::Out;
 use Stream::Test::StorageWithClients;
 use Stream::Test::StorageRW;
 
 use Stream::MemoryStorage;
 
-my $basic_test = Stream::Test::Storage->new(sub {
+my $basic_test = Stream::Test::Out->new(sub {
     Stream::MemoryStorage->new()
 });
 

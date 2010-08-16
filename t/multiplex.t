@@ -8,7 +8,7 @@ use Test::More;
 
 use lib 'lib';
 use lib 't/lib';
-use Stream::Test::Storage;
+use Stream::Test::Out;
 
 use Stream::Out::Multiplex;
 use Stream::Simple qw(array_seq);
@@ -34,7 +34,7 @@ sub test :Test(3) {
     is_deeply(\@v3, [4,9,16], 'third target stream');
 }
 
-my $common_test = Stream::Test::Storage->new(sub {
+my $common_test = Stream::Test::Out->new(sub {
     Stream::Out::Multiplex->new([
         processor(sub { push @v1, shift() }),
         processor(sub { push @v2, shift() x 2 }),

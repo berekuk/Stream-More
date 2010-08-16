@@ -8,7 +8,7 @@ use Test::More;
 
 use lib 'lib';
 use lib 't/lib';
-use Stream::Test::Storage;
+use Stream::Test::Out;
 use Stream::Test::StorageRW;
 use Stream::Concat;
 use Stream::MemoryStorage;
@@ -48,7 +48,7 @@ sub test_concat :Test(...) {
     }
 }
 
-my $common_test = Stream::Test::Storage->new(
+my $common_test = Stream::Test::Out->new(
     sub {
         Stream::Concat->new(
             Stream::MemoryStorage->new() => Stream::MemoryStorage->new()

@@ -7,7 +7,7 @@ use lib 't/lib';
 use lib 'lib';
 
 use parent qw(Test::Class);
-use Stream::Test::Storage;
+use Stream::Test::Out;
 
 use Test::More;
 use Test::Exception;
@@ -48,5 +48,12 @@ sub code_out_test :Test(3) {
     is_deeply(\@data_out, \@data_in, 'code_out result works as anonymous output stream');
 }
 
-Test::Class->runtests( __PACKAGE__->new );
+Test::Class->runtests(
+    __PACKAGE__->new,
+    Stream::Test::Out->new(sub {
+        code_out(sub {
+            # ignore all data
+        })
+    }),
+);
 
