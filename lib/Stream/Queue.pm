@@ -320,7 +320,7 @@ sub try_convert {
             croak "version field not found in $self->{chunk_dir} metadata";
         }
         if ($meta->{version} == 1) {
-            $self->convert;
+            $self->convert($meta);
         }
         elsif ($meta->{version} != $CURRENT_VERSION) {
             croak "Unknown queue version '$meta->{version}'";
@@ -364,9 +364,10 @@ sub convert {
 
         # cleanup
         for my $file (glob "$self->{dir}/clients/$client/*") {
-            return if $file =~ m{/buffer$};
-            return if $file =~ m{/pos$};
-            return if -d $file; # shouldn't happen anyway
+            next if $file =~ m{/buffer$};
+            next if $file =~ m{/pos$};
+            next if -d $file; # shouldn't happen anyway
+            DEBUG "Removing $file";
             xunlink($file);
         }
     }
