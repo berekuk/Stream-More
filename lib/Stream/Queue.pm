@@ -353,7 +353,7 @@ sub convert {
             my @list = @_;
             for my $file (@list) {
                 my $renamed_file = $file;
-                $renamed_file = $file =~ s{^(.*)/(.*)$}{$1/buffer/$2};
+                $renamed_file =~ s{^(.*)/(.*)$}{$1/$target/$2};
                 xrename($file => $renamed_file);
             }
         };
