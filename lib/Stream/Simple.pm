@@ -23,7 +23,7 @@ Stream::Simple - simple procedural-style constructors of some streams
 
 =cut
 
-use base qw(Exporter);
+use parent qw(Exporter);
 our @EXPORT_OK = qw/ array_seq array_in code_out memory_storage /;
 
 use Carp;
