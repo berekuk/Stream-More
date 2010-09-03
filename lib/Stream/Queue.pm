@@ -36,7 +36,7 @@ C<Stream::Queue> and C<Stream::Queue::In> implement local file-based FIFO queue 
 
 =cut
 
-use parent qw(Stream::Storage);
+use parent qw(Stream::Storage Stream::Storage::Role::ClientList);
 
 use Yandex::Version '{{DEBIAN_VERSION}}';
 
@@ -52,8 +52,11 @@ use Carp;
 use Yandex::Persistent 1.3.0;
 use Yandex::X 1.1.0;
 
+use Stream::In::DiskBuffer;
 use Stream::Queue::In;
 use Stream::Queue::BigChunkDir;
+
+our $CURRENT_VERSION = 2;
 
 =item B<< new({ dir => $dir }) >>
 
@@ -114,6 +117,9 @@ Item can be any string or serializable structure, but it can't be C<undef>.
 =cut
 sub write($$) {
     my ($self, $item) = @_;
+    unless (defined $item) {
+        croak "Can't write undef";
+    }
     unless (exists $self->{out}) {
         $self->{out} = $self->{chunk_dir}->out;
     }
@@ -152,6 +158,8 @@ sub register_client {
     }
     INFO "Registering $client at $self->{dir}";
     xmkdir("$self->{dir}/clients/$client");
+    xmkdir("$self->{dir}/clients/$client/buffer");
+    xmkdir("$self->{dir}/clients/$client/pos");
 }
 
 =item B<< unregister_client($client_name) >>
@@ -194,10 +202,12 @@ sub stream {
         }
         $self->register_client($client);
     }
-    return Stream::Queue::In->new({
-        storage => $self,
-        client => $client,
-    });
+    return Stream::In::DiskBuffer->new(
+        Stream::Queue::In->new({
+            storage => $self,
+            client => $client,
+        }) => "$self->{dir}/clients/$client/buffer",
+    );
 }
 
 sub class_caps {
@@ -254,6 +264,12 @@ sub chunks_info {
     return $self->{chunk_dir}->chunks_info;
 }
 
+sub client_names {
+    my $self = shift;
+    my @client_names = map { File::Spec->abs2rel( $_, "$self->{dir}/clients" ) } grep { -d $_ } glob "$self->{dir}/clients/*";
+    return @client_names;
+}
+
 =item B<< clients() >>
 
 Get all storage clients as plain list.
@@ -261,8 +277,7 @@ Get all storage clients as plain list.
 =cut
 sub clients {
     my $self = shift;
-    my @client_names = map { File::Spec->abs2rel( $_, "$self->{dir}/clients" ) } grep { -d $_ } glob "$self->{dir}/clients/*";
-    return map { Stream::Queue::In->new({ storage => $self, client => $_ }) } @client_names;
+    return map { $self->stream($_) } $self->client_names;
 }
 
 =item B<< try_gc() >>
@@ -302,17 +317,19 @@ sub try_convert {
     my $cd_meta = $self->{chunk_dir}->meta;
     if ($cd_meta->{id}) {
         if (not defined $meta->{version}) {
-            undef $cd_meta;
-            $self->convert($meta);
+            croak "version field not found in $self->{chunk_dir} metadata";
+        }
+        if ($meta->{version} == 1) {
+            $self->convert;
+        }
+        elsif ($meta->{version} != $CURRENT_VERSION) {
+            croak "Unknown queue version '$meta->{version}'";
         }
     }
     else {
         # new queue
-        $meta->{version} = 1;
+        $meta->{version} = $CURRENT_VERSION;
         $meta->commit;
-    }
-    if ($meta->{version} != 1) {
-        croak "Unknown queue version '$meta->{version}'";
     }
 }
 
@@ -323,58 +340,39 @@ Convert queue from old format. All client positions will be lost, sorry.
 =cut
 sub convert {
     my ($self, $meta) = @_;
-    INFO "Converting from old format";
+    INFO "Converting from version format 1";
 
-    if (-d "$self->{dir}/convert") {
-        WARN "convert dir already exists, previous convert probably failed";
-    }
-    else {
-        xmkdir("$self->{dir}/convert");
-        xsystem("mv $self->{dir}/*.chunk $self->{dir}/convert/");
-    }
+    my @client_names = $self->client_names;
+    for my $client (@client_names) {
+        for my $dir ("$self->{dir}/clients/$client/buffer", "$self->{dir}/clients/$client/pos") {
+            xmkdir($dir) unless -d $dir;
+        }
 
-    my @chunks = glob "$self->{dir}/convert/*.chunk";
-    my $converted = Stream::Formatter::LinedStorable->wrap(Stream::File->new("$self->{dir}/convert/converted.chunk"));
-    my $filter = Stream::Formatter::LinedStorable->new->read_filter();
-    for my $file (@chunks) {
-        next unless $file =~ /\d+.chunk$/;
-        INFO "Converting $file";
-        my $fh = xopen('<', $file);
-        my $mixed_flag;
-        while (1) {
-            my $item;
-            if ($mixed_flag) {
-                $item = $filter->write($fh->getline);
+        my $rename_all = sub {
+            my $target = shift;
+            my @list = @_;
+            for my $file (@list) {
+                my $renamed_file = $file;
+                $renamed_file = $file =~ s{^(.*)/(.*)$}{$1/buffer/$2};
+                xrename($file => $renamed_file);
             }
-            else {
-                use Storable qw(fd_retrieve);
-                my $pos = tell $fh;
-                $item = eval { fd_retrieve($fh) };
-                if ($@) {
-                    WARN "error: $@, probably new-format lines follow";
-                    seek $fh, $pos, 0;
-                    $mixed_flag = 1;
-                }
-                $item = $$item;
-            }
-            $converted->write($item);
-            last if $fh->eof;
+        };
+        $rename_all->('buffer', glob "$self->{dir}/clients/$client/*.chunk");
+        $rename_all->('buffer', glob "$self->{dir}/clients/$client/*.status");
+        $rename_all->('buffer', "$self->{dir}/clients/$client/meta") if -e "$self->{dir}/clients/$client/meta";
+        $rename_all->('pos', glob "$self->{dir}/clients/$client/*.pos");
+
+        # cleanup
+        for my $file (glob "$self->{dir}/clients/$client/*") {
+            return if $file =~ m{/buffer$};
+            return if $file =~ m{/pos$};
+            return if -d $file; # shouldn't happen anyway
+            xunlink($file);
         }
     }
-    $converted->commit;
-    if (-e "$self->{dir}/convert/converted.chunk") {
-        xrename("$self->{dir}/convert/converted.chunk" => "$self->{dir}/1.chunk");
-    }
-    xsystem("rm -rf $self->{dir}/convert");
-    xsystem("rm -f $self->{dir}/clients/*/status");
-    xsystem("rm -f $self->{dir}/clients/*/status.lock");
 
-    $meta->{version} = 1;
+    $meta->{version} = $CURRENT_VERSION;
     $meta->commit;
-
-    my $cd_meta = $self->{chunk_dir}->meta;
-    $cd_meta->{id} = 1;
-    $cd_meta->commit;
     INFO "Converted successfully";
 }
 
@@ -382,7 +380,7 @@ sub convert {
 
 Remove all unused chunks and cleanup clients' statuses.
 
-This method is called authomatically on each clients commits, so usually you shouldn't call it manually.
+This method is called automatically from time to time, so usually you shouldn't call it manually.
 
 =cut
 sub gc {
@@ -397,7 +395,7 @@ sub gc {
     for my $info (@chunks_info) {
         my $lock = lockf($info->{lock_file}, { blocking => 0 }) or next;
         for my $client (@clients) {
-            my $pos = $client->pos($info->{id});
+            my $pos = $client->in->pos($info->{id});
             my $size = -s $info->{file};
             my $lag = $size - $pos;
             next CHUNK if not defined $lag;
@@ -410,6 +408,7 @@ sub gc {
 
     for (@clients) {
         $_->gc();
+        $_->in->gc();
     }
 }
 

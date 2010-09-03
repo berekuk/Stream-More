@@ -1,3 +1,13 @@
+libstream-more-perl (0.6.8) UNRELEASED; urgency=low
+
+  * Stream::In::DiskBuffer implemented
+  * Stream::Queue:
+   - rewritten to use DiskBuffer
+   - storage version bumped, all processes should die and restart automatically
+   - implement Stream::Storage::Role::ClientList
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Fri, 03 Sep 2010 22:00:19 +0400
+
 libstream-more-perl (0.6.7) unstable; urgency=low
 
   * force dependency on fresh core streams

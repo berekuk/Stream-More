@@ -1,4 +1,4 @@
-package Stream::Queue::Chunk;
+package Stream::In::DiskBuffer::Chunk;
 
 use strict;
 use warnings;
@@ -7,7 +7,7 @@ use parent qw(Stream::In);
 
 =head1 NAME
 
-Stream::Queue::Chunk - represents one client chunk
+Stream::In::DiskBuffer::Chunk - represents one disk buffer chunk
 
 =head1 METHODS
 
