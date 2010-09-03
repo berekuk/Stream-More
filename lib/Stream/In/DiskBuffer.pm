@@ -28,13 +28,14 @@ Stream::In::DiskBuffer - parallelize any input stream using on-disk buffer
 
 Some storages don't support parallel reading using one client name.
 
-This class solves this problem by caching small backlog in multiple on-disk files, allowing to read them in parallel fashion.
+This class solves this problem by caching small backlog in multiple on-disk files, allowing to read them in parallel.
 
 =head1 METHODS
 
 =over
 
 =item B<< new($in, $dir) >>
+
 =item B<< new($in, $dir, $options) >>
 
 Constructor.
@@ -51,23 +52,36 @@ C<$options> is an optional hash with options:
 
 Buffer chunks format. Default is C<storable>.
 
+=item I<gc_period>
+
+Period in seconds to run garbage collecting.
+
 =back
 
 =cut
 sub new {
     my $class = shift;
     my ($in, $dir, @options) = validate_pos(@_, { isa => 'Stream::In' }, 1, { type => HASHREF, optional => 1 });
-    my $self = validate(@options, { format => { default => 'storable' } });
+    my $self = validate(@options, {
+        format => { default => 'storable' },
+        gc_period => { default => 300 },
+    });
     unless ($self->{format} eq 'storable') {
         croak "Only 'storable' format is supported";
     }
     $self->{in} = $in;
     $self->{dir} = $dir;
+    unless (-d $dir) {
+        xmkdir($dir);
+    }
 
     $self->{prev_chunks} = {};
     $self->{uncommited} = 0;
+    bless $self => $class;
 
-    return bless $self => $class;
+    $self->try_gc;
+
+    return $self;
 }
 
 =item B<< meta() >>
@@ -161,7 +175,7 @@ sub _next_chunk {
     return;
 }
 
-=item C<< read() >>
+=item B<< read() >>
 
 Read new item from queue.
 
@@ -188,7 +202,7 @@ sub read {
 }
 
 
-=item C<< commit() >>
+=item B<< commit() >>
 
 Save positions from all read chunks; cleanup queue.
 
@@ -210,7 +224,32 @@ sub commit {
     return;
 }
 
-=item C<< gc() >>
+=item B<< try_gc() >>
+
+Do garbage collecting if it's necessary.
+
+=cut
+sub try_gc {
+    my $self = shift;
+    if ($self->{gc_timestamp_cached} and time < $self->{gc_timestamp_cached} + $self->{gc_period}) {
+        return;
+    }
+
+    my $meta = $self->meta;
+    unless (defined $meta->{gc_timestamp}) {
+        $self->{gc_timestamp_cached} = $meta->{gc_timestamp} = time;
+        $meta->commit;
+        return;
+    }
+    $self->{gc_timestamp_cached} = $meta->{gc_timestamp};
+    if (time > $meta->{gc_timestamp} + $self->{gc_period}) {
+        $self->{gc_timestamp_cached} = $meta->{gc_timestamp} = time;
+        $meta->commit;
+        $self->gc($meta);
+    }
+}
+
+=item B<< gc() >>
 
 Cleanup lost files.
 
@@ -255,12 +294,18 @@ sub gc {
             }
         }
         else {
-            WARN "Unknown file $file";
+            WARN "Removing unknown file $file";
+            $unlink->();
         }
     }
     closedir $dh or die "Can't close '$self->{dir}': $!";
 }
 
+=item B<<in() >>
+
+Get underlying input stream.
+
+=cut
 sub in {
     my $self = shift;
     return $self->{in};

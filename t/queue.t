@@ -3,7 +3,8 @@
 use strict;
 use warnings;
 
-use Test::More tests => 8;
+use parent qw(Test::Class);
+use Test::More;
 
 use lib 'lib';
 
@@ -53,9 +54,11 @@ sub read_n {
     return @items;
 }
 
-# write
-{
+sub setup :Test(setup) {
     PPB::Test::TFiles::import();
+}
+
+sub write :Test(1) {
     my @written = fill_queue(
         [ map { { i => "id$_" } } (1..10) ],
         [ map { { i => "id$_" } } (1..20) ],
@@ -64,9 +67,7 @@ sub read_n {
     pass('write works');
 }
 
-# read
-{
-    PPB::Test::TFiles::import();
+sub read :Test(1) {
     my @written = fill_queue(
         [ map { { str => "id$_" } } (1..10) ],
         [ map { { str => "id$_" } } (11..20) ],
@@ -80,9 +81,7 @@ sub read_n {
     is_deeply([ read_all($in) ], \@written, 'reading from queue');
 }
 
-# read and commits
-{
-    PPB::Test::TFiles::import();
+sub read_and_commits :Test(1) {
     my @written = fill_queue(
         [ map { { id => $_, str => "id$_" } } (1..10) ],
         [ map { { id => $_, str => "id$_" } } (11..20) ],
@@ -108,9 +107,7 @@ sub read_n {
     is_deeply(\@items, \@written, 'reading from queue in several portions');
 }
 
-# clients
-{
-    PPB::Test::TFiles::import();
+sub clients :Test(2) {
     my @written = fill_queue(
         [ map { { id => $_, str => "id$_" } } (1..100) ], # enough data to guarantee parallelism
         [ map { { id => $_, str => "id$_" } } (101..110) ],
@@ -162,9 +159,7 @@ sub read_n {
     is_deeply(\@items2, \@written, 'reading from queue with different client');
 }
 
-# max_chunk_* (1)
-{
-    PPB::Test::TFiles::import();
+sub max_chunk_options :Test(1) {
     my $queue = Stream::Queue->new({
         dir => 'tfiles',
         max_chunk_size => 100,
@@ -182,9 +177,7 @@ sub read_n {
     }, qr/Chunk count exceeded/, 'write fails when all chunks are full');
 }
 
-# gc
-{
-    PPB::Test::TFiles::import();
+sub gc :Test(2) {
     my $queue = Stream::Queue->new({
         dir => 'tfiles',
         max_chunk_size => 10,
@@ -219,3 +212,5 @@ sub read_n {
     $queue->gc;
     cmp_ok($calc_count->(), '<', 30);
 }
+
+__PACKAGE__->new->runtests;

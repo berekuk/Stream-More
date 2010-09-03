@@ -14,6 +14,12 @@ Stream::Queue::In - input stream for Stream::Queue
     $in->read;
     $in->commit;
 
+=head1 DESCRIPTION
+
+This class is an input stream for L<Stream::Queue> class. It is not parallel itself and locks data after every read() and until the next commit.
+
+It is wrapped in L<Stream::In::DiskBuffer> when constructed via C<stream> method of L<Stream::Queue> storage, though.
+
 =head1 METHODS
 
 =over
@@ -25,11 +31,9 @@ use Params::Validate;
 
 use Carp;
 use IO::Handle;
-use Yandex::Persistent 1.3.0;
 use Yandex::Logger;
 use Yandex::Lockf 3.0.0;
 use Yandex::X;
-use Stream::Queue::Chunk;
 use Stream::Formatter::LinedStorable;
 use Stream::File::Cursor;
 
@@ -50,61 +54,49 @@ sub new {
         croak "$self->{client} is not registered at ".$self->{storage}->dir;
     }
     $self->{dir} = $self->{storage}->dir."/clients/$self->{client}/pos";
-    $self->{prev_chunks} = {};
-    $self->{uncommited} = 0;
     bless $self => $class;
     return $self;
 
 }
 
-=item B<< meta() >>
-
-Get metadata object.
-
-It's implemented as simple persistent, so it also works as global exclusive queue lock.
-
-=cut
-sub meta {
-    my $self = shift;
-    return Yandex::Persistent->new("$self->{dir}/meta", { auto_commit => 0, format => 'json' });
-}
-
 =item B<< lock() >>
 
-Get shared lock. All rw operations should take it, so gc would not interfere with them.
+Get lock.
 
 =cut
 sub lock {
     my $self = shift;
-    return lockf("$self->{dir}/lock", { shared => 1 });
+    return lockf("$self->{dir}/lock");
 }
 
 sub read_chunk {
     my $self = shift;
     my $chunk_size = shift;
 
-    my $lock = $self->lock;
+    my $uncommited = $self->{uncommited} || {};
+    $uncommited->{lock} = $self->lock;
+
     my @chunks_info = $self->{storage}->chunks_info;
 
     my $data;
-    my @ins;
     for my $info (@chunks_info) {
-        my $in = Stream::Formatter::LinedStorable->wrap(Stream::File->new($info->{file}))->stream(
+        my $in = $uncommited->{in}{ $info->{id} }; # it can already be in "uncommited" cache
+
+        # otherwise, create it now
+        $in ||= Stream::Formatter::LinedStorable->wrap(Stream::File->new($info->{file}))->stream(
             Stream::File::Cursor->new("$self->{dir}/$info->{id}.pos")
         );
+        $uncommited->{in}{ $info->{id} } ||= $in; # and put in cache immediately
+
         my $portion_size = $chunk_size;
         $portion_size -= @$data if $data;
         my $portion_data = $in->read_chunk($portion_size) or next;
-        push @ins, $in;
         push @$data, @$portion_data;
         last if @$data >= $chunk_size;
     }
     if ($data and @$data) {
-        # returning non-empty chunk, keeping this input stream locked until "commit" will be called
-        $self->{uncommited} = {
-            lock => $lock,
-            in => [@ins],
-        };
+        # returning non-empty chunk, keeping this client locked until "commit" will be called
+        $self->{uncommited} = $uncommited;
     }
     return $data;
 }
@@ -126,7 +118,7 @@ sub read {
 sub commit {
     my $self = shift;
     return unless $self->{uncommited};
-    for (@{ $self->{uncommited}{in} }) {
+    for (values %{ $self->{uncommited}{in} }) {
         $_->commit;
     }
     delete $self->{uncommited};
@@ -156,7 +148,6 @@ Cleanup lost files.
 sub gc {
     my $self = shift;
     my $lock = $self->lock;
-    $lock->unshare;
     opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";
     while (my $file = readdir $dh) {
         next if $file eq '.';
@@ -166,13 +157,7 @@ sub gc {
             xunlink("$self->{dir}/$file");
         };
         my $id;
-        if (($id) = $file =~ /^(\d+)\.lock$/) {
-            unless (-e "$self->{dir}/$id.status") {
-                $unlink->();
-                DEBUG "[$self->{client}] Lost lock file $file removed";
-            }
-        }
-        elsif (($id) = $file =~ /^(\d+)\.pos$/) {
+        if (($id) = $file =~ /^(\d+)\.pos$/) {
             unless (-e $self->{storage}->dir."/$id.chunk") {
                 $unlink->();
                 DEBUG "[$self->{client}] Lost pos file $file for $id chunk removed";
@@ -185,7 +170,8 @@ sub gc {
             }
         }
         else {
-            WARN "[$self->{client}] Unknown file $file";
+            WARN "[$self->{client}] Removing unknown file $file";
+            $unlink->();
         }
     }
     closedir $dh or die "Can't close '$self->{dir}': $!";
