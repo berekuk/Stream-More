@@ -36,7 +36,7 @@ C<Stream::Queue> and C<Stream::Queue::In> implement local file-based FIFO queue 
 
 =cut
 
-use parent qw(Stream::Storage);
+use parent qw(Stream::Storage Stream::Storage::Role::ClientList);
 
 use Yandex::Version '{{DEBIAN_VERSION}}';
 
@@ -52,6 +52,7 @@ use Carp;
 use Yandex::Persistent 1.3.0;
 use Yandex::X 1.1.0;
 
+use Stream::In::DiskBuffer;
 use Stream::Queue::In;
 use Stream::Queue::BigChunkDir;
 
@@ -152,6 +153,8 @@ sub register_client {
     }
     INFO "Registering $client at $self->{dir}";
     xmkdir("$self->{dir}/clients/$client");
+    xmkdir("$self->{dir}/clients/$client/buffer");
+    xmkdir("$self->{dir}/clients/$client/pos");
 }
 
 =item B<< unregister_client($client_name) >>
@@ -194,10 +197,12 @@ sub stream {
         }
         $self->register_client($client);
     }
-    return Stream::Queue::In->new({
-        storage => $self,
-        client => $client,
-    });
+    return Stream::In::DiskBuffer->new(
+        Stream::Queue::In->new({
+            storage => $self,
+            client => $client,
+        }) => "$self->{dir}/clients/$client/buffer",
+    );
 }
 
 sub class_caps {
@@ -254,6 +259,12 @@ sub chunks_info {
     return $self->{chunk_dir}->chunks_info;
 }
 
+sub client_names {
+    my $self = shift;
+    my @client_names = map { File::Spec->abs2rel( $_, "$self->{dir}/clients" ) } grep { -d $_ } glob "$self->{dir}/clients/*";
+    return @client_names;
+}
+
 =item B<< clients() >>
 
 Get all storage clients as plain list.
@@ -261,8 +272,7 @@ Get all storage clients as plain list.
 =cut
 sub clients {
     my $self = shift;
-    my @client_names = map { File::Spec->abs2rel( $_, "$self->{dir}/clients" ) } grep { -d $_ } glob "$self->{dir}/clients/*";
-    return map { Stream::Queue::In->new({ storage => $self, client => $_ }) } @client_names;
+    return map { $self->stream($_) } $self->client_names;
 }
 
 =item B<< try_gc() >>
@@ -397,7 +407,7 @@ sub gc {
     for my $info (@chunks_info) {
         my $lock = lockf($info->{lock_file}, { blocking => 0 }) or next;
         for my $client (@clients) {
-            my $pos = $client->pos($info->{id});
+            my $pos = $client->in->pos($info->{id});
             my $size = -s $info->{file};
             my $lag = $size - $pos;
             next CHUNK if not defined $lag;
@@ -410,6 +420,7 @@ sub gc {
 
     for (@clients) {
         $_->gc();
+        $_->in->gc();
     }
 }
 
