@@ -130,7 +130,7 @@ sub commit {
         name => $self->{name},
         format => $self->{format},
     );
-    my $response = $self->{ua}->request(POST $uri->as_string, Content => join '', @{ $self->{buffer} });
+    my $response = $self->{ua}->request(POST $uri->as_string, Content_Type => 'text/plain', Content => join '', @{ $self->{buffer} });
     unless ($response->is_success) {
         croak "Propagating into $self->{name} at $self->{endpoint} failed: ".$response->status_line;
     }

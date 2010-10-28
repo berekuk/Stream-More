@@ -1,3 +1,9 @@
+libstream-more-perl (0.6.9) unstable; urgency=low
+
+  * Stream::Propagate: explicit Content-Type: text/plain
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Thu, 28 Oct 2010 16:08:19 +0400
+
 libstream-more-perl (0.6.8) unstable; urgency=low
 
   * Stream::In::DiskBuffer implemented
