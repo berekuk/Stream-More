@@ -3,7 +3,11 @@ package Stream::In::DiskBuffer::Chunk;
 use strict;
 use warnings;
 
-use parent qw(Stream::In);
+use namespace::autoclean;
+use parent qw(
+    Stream::In
+    Stream::In::Role::Lag
+);
 
 =head1 NAME
 
@@ -19,7 +23,7 @@ use Yandex::X;
 use Yandex::Lockf 3.0.0;
 use Stream::Formatter::LinedStorable;
 use Stream::File::Cursor;
-use Stream::File;
+use Stream::File 0.9.4; # from this version, Stream::File::In implements 'lag'
 use Params::Validate qw(:all);
 
 sub new {
@@ -77,6 +81,11 @@ Get chunk id.
 sub id {
     my $self = shift;
     return $self->{id};
+}
+
+sub lag {
+    my $self = shift;
+    return $self->{in}->lag;
 }
 
 =item B<< remove() >>

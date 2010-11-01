@@ -210,10 +210,6 @@ sub stream {
     );
 }
 
-sub class_caps {
-    { persistent => 1 }
-}
-
 =back
 
 =head1 INTERNAL METHODS

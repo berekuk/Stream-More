@@ -3,7 +3,9 @@ package Stream::In::DiskBuffer;
 use strict;
 use warnings;
 
-use parent qw(Stream::In);
+use parent qw(
+    Stream::In
+);
 
 use namespace::autoclean;
 
@@ -125,6 +127,14 @@ sub _new_chunk {
     return $new_id;
 }
 
+sub _load_chunk {
+    my ($self, $id) = @_;
+
+    # this line can create lock file for already removed chunk, which will be removed only at next gc()
+    # TODO - think how we can fix it
+    return Stream::In::DiskBuffer::Chunk->load($self->{dir}, $id);
+}
+
 sub _next_chunk {
     my $self = shift;
 
@@ -135,9 +145,7 @@ sub _next_chunk {
             return; # chunk already processed in this process
         }
 
-        # this line can create lock file for already removed chunk, which will be removed only at next gc()
-        # TODO - think how we can fix it
-        my $chunk = Stream::In::DiskBuffer::Chunk->load($self->{dir}, $id) or return;
+        my $chunk = $self->_load_chunk($id) or return;
 
         DEBUG "Reading $chunk_name";
         $self->{chunk} = $chunk;
@@ -258,8 +266,8 @@ sub gc {
             unless (-e "$self->{dir}/$id.chunk") {
                 $unlink->();
                 DEBUG "Lost file $file removed";
-                next;
             }
+            next;
         }
 
         if ($file =~ /^(\d+)\.chunk.new$/) {
@@ -284,6 +292,45 @@ Get underlying input stream.
 sub in {
     my $self = shift;
     return $self->{in};
+}
+
+=item B<< buffer_lag() >>
+
+Get lag of this buffer (this is slightly less than total buffer size, so this method is called B<buffer_lag()> instead of B<buffer_size()> for a reason).
+
+=cut
+sub buffer_lag {
+    my $self = shift;
+    my $lag = 0;
+
+    my @chunk_files = glob $self->{dir}."/*.chunk";
+    for (@chunk_files) {
+        my $id = $self->_chunk2id($_);
+        next if $self->{prev_chunks}{$id};
+        my $chunk = $self->_load_chunk($id);
+        next unless $chunk;
+        $lag += $chunk->lag;
+    }
+    return $lag;
+}
+
+=item B<< lag() >>
+
+Get total lag of this buffer and underlying stream.
+
+=cut
+sub lag {
+    my $self = shift;
+    die "underlying input stream doesn't implement Lag role" unless $self->{in}->does('Stream::In::Role::Lag');
+    return $self->{in}->lag + $self->buffer_lag;
+}
+
+sub does {
+    my ($self, $role) = @_;
+    if ($role eq 'Stream::In::Role::Lag') {
+        return $self->{in}->does($role);
+    }
+    return $self->SUPER::does($role);
 }
 
 =back
