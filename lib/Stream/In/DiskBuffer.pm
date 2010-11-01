@@ -96,16 +96,6 @@ sub meta {
     return Yandex::Persistent->new("$self->{dir}/meta", { auto_commit => 0, format => 'json' });
 }
 
-=item B<< lock() >>
-
-Get shared lock. All rw operations should take it, so gc would not interfere with them.
-
-=cut
-sub lock {
-    my $self = shift;
-    return lockf("$self->{dir}/lock", { shared => 1 });
-}
-
 sub _next_id {
     my $self = shift;
     my $status = $self->meta;
@@ -124,8 +114,6 @@ sub _chunk2id {
 
 sub _new_chunk {
     my $self = shift;
-
-    my $lock = $self->lock;
 
     my $chunk_size = $self->{uncommited} + 1;
     my $data = $self->{in}->read_chunk($chunk_size);
@@ -255,48 +243,35 @@ Cleanup lost files.
 
 =cut
 sub gc {
-    my $self = shift;
-    my $lock = $self->lock;
-    $lock->unshare;
+    my ($self, $meta) = @_;
     opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";
     while (my $file = readdir $dh) {
         next if $file eq '.';
         next if $file eq '..';
-        next if $file =~ /(^meta|^lock$)/;
+        next if $file =~ /^meta/;
         next if $file =~ /^\d+\.chunk$/;
         my $unlink = sub {
             xunlink("$self->{dir}/$file");
         };
-        my $id;
-        if (($id) = $file =~ /^(\d+)\.lock$/) {
-            unless (-e "$self->{dir}/$id.status") {
-                $unlink->();
-                DEBUG "Lost lock file $file removed";
-            }
-        }
-        elsif (($id) = $file =~ /^(\d+)\.status$/) {
+
+        if (my ($id) = $file =~ /^(\d+)\.(?: lock | status | status\.lock )$/x) {
             unless (-e "$self->{dir}/$id.chunk") {
                 $unlink->();
-                DEBUG "Lost status file $file for $id client chunk removed";
+                DEBUG "Lost file $file removed";
+                next;
             }
         }
-        elsif (($id) = $file =~ /^(\d+)\.status.lock$/) {
-            unless (-e "$self->{dir}/$id.chunk") {
-                $unlink->();
-                DEBUG "Lost status lock file $file for $id client chunk removed";
-            }
-        }
-        elsif ($file =~ /^(\d+)\.chunk.new$/) {
+
+        if ($file =~ /^(\d+)\.chunk.new$/) {
             my $age = time - (stat($file))[10];
             unless ($age < 600) {
                 $unlink->();
                 DEBUG "Temp file $file removed";
+                next;
             }
         }
-        else {
-            WARN "Removing unknown file $file";
-            $unlink->();
-        }
+        WARN "Removing unknown file $file";
+        $unlink->();
     }
     closedir $dh or die "Can't close '$self->{dir}': $!";
 }
