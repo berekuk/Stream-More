@@ -37,6 +37,26 @@ sub linear :Test(4) {
     is($buffered_in->read, "c\n", 'read after reading without commit');
 }
 
+sub gc_bug :Test(4) {
+    my $file = Stream::File->new('tfiles/file');
+    $file->write("$_\n") for 'a'..'z';
+    $file->commit;
+
+    my $in = $file->stream(Stream::File::Cursor->new('tfiles/cursor'));
+
+    my $buffered_in = Stream::In::DiskBuffer->new($in, 'tfiles/buffer');
+
+    is($buffered_in->read, "a\n", 'first item');
+    $buffered_in->commit;
+
+    is($buffered_in->read, "b\n", 'second item');
+    is($buffered_in->read, "c\n", 'third item');
+    $buffered_in->commit;
+
+    $buffered_in->gc;
+    is($buffered_in->read, "d\n", "gc didn't break any posfiles");
+}
+
 
 __PACKAGE__->new->runtests;
 
