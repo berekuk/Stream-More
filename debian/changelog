@@ -1,6 +1,7 @@
 libstream-more-perl (0.6.12) UNRELEASED; urgency=low
 
   * Stream::Unrotate removed
+  * Stream::Simple: memory_storage() prototype fixed
 
  -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 30 Nov 2010 20:43:39 +0300
 

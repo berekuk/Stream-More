@@ -68,7 +68,7 @@ sub code_out(&) {
 Construct new in-memory storage, i.e. instance of L<Stream::MemoryStorage>.
 
 =cut
-sub memory_storage($) {
+sub memory_storage() {
     return Stream::MemoryStorage->new();
 }
 
