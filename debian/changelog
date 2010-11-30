@@ -1,3 +1,9 @@
+libstream-more-perl (0.6.12) UNRELEASED; urgency=low
+
+  * Stream::Unrotate removed
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 30 Nov 2010 20:43:39 +0300
+
 libstream-more-perl (0.6.11) unstable; urgency=low
 
   * Stream::In::DiskBuffer and Stream::Queue::In now implement lag method
