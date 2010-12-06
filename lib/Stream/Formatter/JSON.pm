@@ -14,7 +14,7 @@ Stream::Formatter::JSON - JSON formatter
 use JSON::XS;
 
 use Stream::Formatter 0.6.0;
-use base qw(Stream::Formatter);
+use parent qw(Stream::Formatter);
 use Stream::Filter qw(filter);
 use Stream::Utils qw(catalog);
 

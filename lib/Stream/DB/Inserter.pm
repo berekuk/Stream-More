@@ -26,7 +26,7 @@ Stream::DB::Inserter - simple stream wrapper around PPB::DB::Inserter
 
 use Yandex::Version '{{DEBIAN_VERSION}}';
 
-use base qw(Stream::Out);
+use parent qw(Stream::Out);
 use PPB::DB::Inserter;
 
 sub new {
