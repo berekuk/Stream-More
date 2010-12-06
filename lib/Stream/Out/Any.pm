@@ -22,14 +22,16 @@ Stream::Out::Any - write data into one of several output streams
 use Yandex::Version '{{DEBIAN_VERSION}}';
 use Yandex::Logger;
 
-use base qw(Stream::Out);
+use parent qw(Stream::Out);
 
+use namespace::autoclean;
 use Params::Validate qw(:all);
 use Scalar::Util qw(blessed);
+use List::MoreUtils qw(all);
 
 sub new {
     my $class = shift;
-    my ($targets) = validate_pos(@_, {
+    my ($targets, @options) = validate_pos(@_, {
         type => ARRAYREF,
         callbacks => {
             'targets are streams' => sub {
@@ -40,14 +42,19 @@ sub new {
                 return 1;
             }
         },
+    }, 0);
+
+    my $options = validate(@options, {
+        revalidate => { type => SCALAR, regex => qr/^\d+$/, optional => 1 },
     });
     my $total = @$targets;
     my $self = bless {
         targets => $targets,
         buffers => [],
-        invalid => [ (0) x $total ],
+        invalid => [ (undef) x $total ],
         n => 0,
         total => $total,
+        %$options,
     } => $class;
     return $self;
 }
@@ -61,20 +68,33 @@ sub _next_target {
     my $self = shift;
     do {
         $self->{n} = ($self->{n} + 1) % $self->{total};
-    } while ($self->{invalid}[ $self->{n} ]);
+    } while ($self->_is_invalid($self->{n}));
 }
 
 sub _check_invalid {
     my $self = shift;
-    my $all = sub { $_ || return 0 for @_; 1 };
-    if ($all->(@{ $self->{invalid} })) {
+    if (all { $self->_is_invalid($_) } (0 .. $self->{total} - 1)) {
         die "All targets are invalid";
     }
 }
 
+sub _is_invalid {
+    my ($self, $i) = @_;
+    if (defined $self->{revalidate} and defined $self->{invalid}[$i] and $self->{invalid}[$i] < time) {
+        INFO "Target #$i revalidated";
+        undef $self->{invalid}[$i];
+    }
+    return defined $self->{invalid}[$i];
+}
+
 sub _mark_invalid {
     my ($self, $i) = @_;
-    $self->{invalid}[ $i ] = 1;
+    if (defined $self->{revalidate}) {
+        $self->{invalid}[ $i ] = time + $self->{revalidate};
+    }
+    else {
+        $self->{invalid}[ $i ] = 1;
+    }
     $self->_check_invalid;
     $self->_next_target;
 
@@ -105,7 +125,7 @@ sub commit {
     do {
         $self->_check_invalid;
         for my $i (0..$self->{total}-1) {
-            next if $self->{invalid}[$i];
+            next if $self->_is_invalid($i);
             my $target = $self->{targets}[$i];
 
             eval {
