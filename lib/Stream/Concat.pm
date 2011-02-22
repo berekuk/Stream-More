@@ -44,6 +44,11 @@ sub write_chunk {
     $self->{new}->write_chunk(@_);
 }
 
+sub commit {
+    my $self = shift;
+    $self->{new}->commit;
+}
+
 sub stream {
     my $self = shift;
     my $old_in = $self->{old}->stream(@_);
