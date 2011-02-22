@@ -11,7 +11,7 @@ Stream::Bin::Filter - base class for many of your /usr/bin/ scripts
 
 =head1 SYNOPSIS
 
-use base qw(Stream::Bin::Filter);
+use parent qw(Stream::Bin::Filter);
 
 sub write {
     my $line = shift;
@@ -43,7 +43,7 @@ use Scalar::Util qw(blessed);
 use Stream::Utils qw(catalog process);
 use Params::Validate qw(:all);
 
-use base qw(Stream::Filter);
+use parent qw(Stream::Filter);
 
 =item I<run($params)>
 

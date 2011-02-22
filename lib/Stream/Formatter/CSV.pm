@@ -13,7 +13,7 @@ This is not really a CSV formatter, it doesn't implement correct quoting.
 
 =cut
 
-use base qw(Stream::Formatter);
+use parent qw(Stream::Formatter);
 use Stream::Filter qw(filter);
 use Params::Validate qw(:all);
 use Scalar::Util qw(reftype);

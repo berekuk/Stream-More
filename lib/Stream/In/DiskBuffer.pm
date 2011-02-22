@@ -3,7 +3,9 @@ package Stream::In::DiskBuffer;
 use strict;
 use warnings;
 
-use parent qw(Stream::In);
+use parent qw(
+    Stream::In
+);
 
 use namespace::autoclean;
 
@@ -108,17 +110,6 @@ sub meta {
     return Yandex::Persistent->new("$self->{dir}/meta", { auto_commit => 0, format => 'json' });
 }
 
-=item B<< lock() >>
-
-Get shared lock. All rw operations should take it, so gc would not interfere with them.
-
-=cut
-sub lock {
-    my $self = shift;
-    $self->_check_ro();
-    return lockf("$self->{dir}/lock", { shared => 1 });
-}
-
 sub _next_id {
     my $self = shift;
     $self->_check_ro();
@@ -139,8 +130,6 @@ sub _chunk2id {
 sub _new_chunk {
     my $self = shift;
     $self->_check_ro();
-    my $lock = $self->lock;
-
     my $chunk_size = $self->{uncommited} + 1;
     my $data = $self->{in}->read_chunk($chunk_size);
     return unless $data;
@@ -149,6 +138,14 @@ sub _new_chunk {
     Stream::In::DiskBuffer::Chunk->new($self->{dir}, $new_id, $data);
     $self->{in}->commit;
     return $new_id;
+}
+
+sub _load_chunk {
+    my ($self, $id) = @_;
+
+    # this line can create lock file for already removed chunk, which will be removed only at next gc()
+    # TODO - think how we can fix it
+    return Stream::In::DiskBuffer::Chunk->load($self->{dir}, $id, { read_only => $self->{read_only} });
 }
 
 sub _next_chunk {
@@ -161,9 +158,7 @@ sub _next_chunk {
             return; # chunk already processed in this process
         }
 
-        # this line can create lock file for already removed chunk, which will be removed only at next gc()
-        # TODO - think how we can fix it
-        my $chunk = Stream::In::DiskBuffer::Chunk->load($self->{dir}, $id, { read_only => $self->{read_only} }) or return;
+        my $chunk = $self->_load_chunk($id) or return;
 
         DEBUG "Reading $chunk_name";
         $self->{chunk} = $chunk;
@@ -302,49 +297,37 @@ Cleanup lost files.
 
 =cut
 sub gc {
-    my $self = shift;
+    my ($self, $meta) = @_;
     $self->_check_ro();
-    my $lock = $self->lock;
-    $lock->unshare;
+
     opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";
     while (my $file = readdir $dh) {
         next if $file eq '.';
         next if $file eq '..';
-        next if $file =~ /(^meta|^lock$)/;
+        next if $file =~ /^meta/;
         next if $file =~ /^\d+\.chunk$/;
         my $unlink = sub {
             xunlink("$self->{dir}/$file");
         };
-        my $id;
-        if (($id) = $file =~ /^(\d+)\.lock$/) {
-            unless (-e "$self->{dir}/$id.status") {
-                $unlink->();
-                DEBUG "Lost lock file $file removed";
-            }
-        }
-        elsif (($id) = $file =~ /^(\d+)\.status$/) {
+
+        if (my ($id) = $file =~ /^(\d+)\.(?: lock | status | status\.lock )$/x) {
             unless (-e "$self->{dir}/$id.chunk") {
                 $unlink->();
-                DEBUG "Lost status file $file for $id client chunk removed";
+                DEBUG "Lost file $file removed";
             }
+            next;
         }
-        elsif (($id) = $file =~ /^(\d+)\.status.lock$/) {
-            unless (-e "$self->{dir}/$id.chunk") {
-                $unlink->();
-                DEBUG "Lost status lock file $file for $id client chunk removed";
-            }
-        }
-        elsif ($file =~ /^(\d+)\.chunk.new$/) {
+
+        if ($file =~ /^(\d+)\.chunk.new$/) {
             my $age = time - (stat($file))[10];
             unless ($age < 600) {
                 $unlink->();
                 DEBUG "Temp file $file removed";
+                next;
             }
         }
-        else {
-            WARN "Removing unknown file $file";
-            $unlink->();
-        }
+        WARN "Removing unknown file $file";
+        $unlink->();
     }
     closedir $dh or die "Can't close '$self->{dir}': $!";
 }
@@ -357,6 +340,45 @@ Get underlying input stream.
 sub in {
     my $self = shift;
     return $self->{in};
+}
+
+=item B<< buffer_lag() >>
+
+Get lag of this buffer (this is slightly less than total buffer size, so this method is called B<buffer_lag()> instead of B<buffer_size()> for a reason).
+
+=cut
+sub buffer_lag {
+    my $self = shift;
+    my $lag = 0;
+
+    my @chunk_files = glob $self->{dir}."/*.chunk";
+    for (@chunk_files) {
+        my $id = $self->_chunk2id($_);
+        next if $self->{prev_chunks}{$id};
+        my $chunk = $self->_load_chunk($id);
+        next unless $chunk;
+        $lag += $chunk->lag;
+    }
+    return $lag;
+}
+
+=item B<< lag() >>
+
+Get total lag of this buffer and underlying stream.
+
+=cut
+sub lag {
+    my $self = shift;
+    die "underlying input stream doesn't implement Lag role" unless $self->{in}->does('Stream::In::Role::Lag');
+    return $self->{in}->lag + $self->buffer_lag;
+}
+
+sub does {
+    my ($self, $role) = @_;
+    if ($role eq 'Stream::In::Role::Lag') {
+        return $self->{in}->does($role);
+    }
+    return $self->SUPER::does($role);
 }
 
 =back

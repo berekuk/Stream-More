@@ -3,7 +3,7 @@ package Stream::Filter::Subfilter;
 use strict;
 use warnings;
 
-use base qw(Stream::Filter);
+use parent qw(Stream::Filter);
 
 use Params::Validate qw(:all);
 

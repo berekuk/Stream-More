@@ -7,7 +7,6 @@ use parent qw(Test::Class);
 use Test::More;
 
 use lib 'lib';
-use lib '../core/lib/';
 
 use PPB::Test::TFiles;
 use Stream::File;
@@ -44,6 +43,7 @@ sub read_only :Test(4) {
     $file->commit;
 
     my $in = $file->stream(Stream::File::Cursor->new('tfiles/cursor'));
+
     my $buffered_in1 = Stream::In::DiskBuffer->new($in, 'tfiles/buffer');
     $buffered_in1->read for 1 .. 3;
     # do not commit
@@ -59,8 +59,26 @@ sub read_only :Test(4) {
     $data = $buffered_ro->read_chunk(10);
     is_deeply($data, [map {"$_\n"} ('a'..'e')], "read more");
     is($buffered_ro->lag(), (26-15)*2, "yet lag");
+}
 
+sub gc_bug :Test(4) {
+    my $file = Stream::File->new('tfiles/file');
+    $file->write("$_\n") for 'a'..'z';
+    $file->commit;
 
+    my $in = $file->stream(Stream::File::Cursor->new('tfiles/cursor'));
+
+    my $buffered_in = Stream::In::DiskBuffer->new($in, 'tfiles/buffer');
+
+    is($buffered_in->read, "a\n", 'first item');
+    $buffered_in->commit;
+
+    is($buffered_in->read, "b\n", 'second item');
+    is($buffered_in->read, "c\n", 'third item');
+    $buffered_in->commit;
+
+    $buffered_in->gc;
+    is($buffered_in->read, "d\n", "gc didn't break any posfiles");
 }
 
 

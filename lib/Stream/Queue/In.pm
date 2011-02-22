@@ -26,7 +26,10 @@ It is wrapped in L<Stream::In::DiskBuffer> when constructed via C<stream> method
 
 =cut
 
-use parent qw(Stream::In);
+use parent qw(
+    Stream::In::Role::Lag
+    Stream::In
+);
 use Params::Validate;
 
 use Carp;
@@ -76,6 +79,38 @@ sub lock {
     return lockf("$self->{dir}/lock");
 }
 
+sub _info2in {
+    my ($self, $info) = @_;
+
+    my $in;
+    if ($self->{uncommited} and $self->{uncommited}{ $info->{in} }) {
+        $in = $self->{uncommited}->{in}{ $info->{id} }; # it can already be in "uncommited" cache
+    }
+    else {
+        # otherwise, create it now
+        $in ||= Stream::Formatter::LinedStorable->wrap(Stream::File->new($info->{file}))->stream(
+            Stream::File::Cursor->new("$self->{dir}/$info->{id}.pos"));
+    }
+    return $in;
+}
+
+sub lag {
+    my $self = shift;
+    my $lag = 0;
+    for my $info ($self->{storage}->chunks_info) {
+
+        # If _info2in fails, it probably means that gc already removed it,
+        # so this eval just prevents us from occasional meaningless
+        # exceptions... at least until Stream::File will start to take locks,
+        # and then we are screwed and will get random values on every call.
+        my $in = eval { $self->_info2in($info) };
+        next unless $in;
+
+        $lag += $in->lag;
+    }
+    return $lag;
+}
+
 sub read_chunk {
     my $self = shift;
     my $chunk_size = shift;
@@ -87,13 +122,8 @@ sub read_chunk {
 
     my $data;
     for my $info (@chunks_info) {
-        my $in = $uncommited->{in}{ $info->{id} }; # it can already be in "uncommited" cache
-
-        # otherwise, create it now
-        $in ||= Stream::Formatter::LinedStorable->wrap(Stream::File->new($info->{file}))->stream(
-            Stream::File::Cursor->new("$self->{dir}/$info->{id}.pos")
-        );
-        $uncommited->{in}{ $info->{id} } ||= $in; # and put in cache immediately
+        my $in = $self->_info2in($info); # find in cache or open new chunk
+        $uncommited->{in}{ $info->{id} } ||= $in; # put in cache immediately
 
         my $portion_size = $chunk_size;
         $portion_size -= @$data if $data;
@@ -165,22 +195,16 @@ sub gc {
             xunlink("$self->{dir}/$file");
         };
         my $id;
-        if (($id) = $file =~ /^(\d+)\.pos$/) {
+        if (($id) = $file =~ /^(\d+)\.(?: pos | pos\.lock )$/x) {
             unless (-e $self->{storage}->dir."/$id.chunk") {
                 $unlink->();
-                DEBUG "[$self->{client}] Lost pos file $file for $id chunk removed";
+                DEBUG "[$self->{client}] Lost file $file for $id chunk removed";
             }
+            next;
         }
-        elsif (($id) = $file =~ /^(\d+)\.pos.lock$/) {
-            unless (-e $self->{storage}->dir."/$id.chunk") {
-                $unlink->();
-                DEBUG "[$self->{client}] Lost pos lock file $file for $id chunk removed";
-            }
-        }
-        else {
-            WARN "[$self->{client}] Removing unknown file $file";
-            $unlink->();
-        }
+
+        WARN "[$self->{client}] Removing unknown file $file";
+        $unlink->();
     }
     closedir $dh or die "Can't close '$self->{dir}': $!";
 }
