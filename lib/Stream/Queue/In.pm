@@ -63,9 +63,10 @@ sub new {
 
 }
 
-sub _check_ro ($) {
+sub _check_ro {
     my $self = shift;
-    die "Stream is read only" if $self->{read_only};
+    local $Carp::CarpLevel = 1;
+    croak "Stream is read only" if $self->{read_only};
 }
 
 =item B<< lock() >>
@@ -133,7 +134,6 @@ sub read_chunk {
     }
     if ($data and @$data) {
         # returning non-empty chunk, keeping this client locked until "commit" will be called
-        warn "locked";
         $self->{uncommited} = $uncommited;
     }
     return $data;

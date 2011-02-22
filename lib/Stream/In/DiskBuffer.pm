@@ -90,7 +90,7 @@ sub new {
 
 sub _check_ro {
     my $self = shift;
-    $Carp::CarpLevel = 1;
+    local $Carp::CarpLevel = 1;
     croak "Stream is read only" if $self->{read_only};
 }
 
