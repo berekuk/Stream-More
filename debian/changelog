@@ -1,11 +1,15 @@
 libstream-more-perl (0.6.12) unstable; urgency=low
 
+  [ Vyacheslav Matjukhin (No comments) ]
   * Stream::Unrotate removed
   * Stream::Simple: memory_storage() prototype fixed
   * Stream::Out::Any: 'revalidate' option implemented
   * Stream::Concat: commit now commits new underlying stream
 
- -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Mon, 07 Feb 2011 16:25:14 +0300
+  [ Andrei Mishchenko ]
+  * DiskBuffer read_only mode, formats support and proper lag calculation
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Tue, 22 Feb 2011 22:03:17 +0300
 
 libstream-more-perl (0.6.11) unstable; urgency=low
 
