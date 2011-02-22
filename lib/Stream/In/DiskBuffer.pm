@@ -69,9 +69,6 @@ sub new {
         gc_period => { default => 300 },
         read_only => { default => 0 },
     });
-    unless ($self->{format} eq 'storable') {
-        croak "Only 'storable' format is supported";
-    }
     $self->{in} = $in;
     $self->{dir} = $dir;
 
@@ -135,17 +132,18 @@ sub _new_chunk {
     return unless $data;
     return unless @$data;
     my $new_id = $self->_next_id;
-    Stream::In::DiskBuffer::Chunk->new($self->{dir}, $new_id, $data);
+    Stream::In::DiskBuffer::Chunk->new($self->{dir}, $new_id, $data, { format => $self->{format} });
     $self->{in}->commit;
     return $new_id;
 }
 
 sub _load_chunk {
-    my ($self, $id) = @_;
+    my ($self, $id, $overrides) = @_;
+    $overrides ||= {};
 
     # this line can create lock file for already removed chunk, which will be removed only at next gc()
     # TODO - think how we can fix it
-    return Stream::In::DiskBuffer::Chunk->load($self->{dir}, $id, { read_only => $self->{read_only} });
+    return Stream::In::DiskBuffer::Chunk->load($self->{dir}, $id, { read_only => $self->{read_only}, format => $self->{format}, %$overrides });
 }
 
 sub _next_chunk {
@@ -245,27 +243,6 @@ sub commit {
     return;
 }
 
-=item B<< lag() >>
-
-Lag
-
-=cut
-
-sub lag {
-    my $self = shift;
-    my $lag = $self->{in}->lag();
-
-    my @chunk_files = glob $self->{dir}."/*.chunk";
-    for my $chunk_file (@chunk_files) {
-        my $id = $self->_chunk2id($chunk_file);
-        next if $self->{prev_chunks}{$id};
-        my $chunk = Stream::In::DiskBuffer::Chunk->load($self->{dir}, $id, { read_only => 1 }) or next; # always read_only!
-        $lag += $chunk->lag();
-    }
-
-    return $lag;
-}
-
 =item B<< try_gc() >>
 
 Do garbage collecting if it's necessary.
@@ -348,6 +325,7 @@ Get lag of this buffer (this is slightly less than total buffer size, so this me
 
 =cut
 sub buffer_lag {
+
     my $self = shift;
     my $lag = 0;
 
@@ -355,9 +333,12 @@ sub buffer_lag {
     for (@chunk_files) {
         my $id = $self->_chunk2id($_);
         next if $self->{prev_chunks}{$id};
-        my $chunk = $self->_load_chunk($id);
-        next unless $chunk;
-        $lag += $chunk->lag;
+        if ($self->{chunk} and not $self->{chunk_in} and $self->{chunk}->id eq $id) {
+            $lag += $self->{chunk}->lag();
+        } else {
+            my $chunk = $self->_load_chunk($id, { read_only => 1 }) or next; # always read_only
+            $lag += $chunk->lag();
+        }
     }
     return $lag;
 }
