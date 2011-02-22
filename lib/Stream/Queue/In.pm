@@ -49,6 +49,7 @@ sub new {
     my $self = validate(@_, {
         storage => { isa => 'Stream::Queue' },
         client => { regex => qr/^[\w-]+$/ },
+        read_only => { default => 0 },
     });
     unless ($self->{storage}->has_client($self->{client})) {
         croak "$self->{client} is not registered at ".$self->{storage}->dir;
@@ -59,6 +60,11 @@ sub new {
 
 }
 
+sub _check_ro ($) {
+    my $self = shift;
+    die "Stream is read only" if $self->{read_only};
+}
+
 =item B<< lock() >>
 
 Get lock.
@@ -66,6 +72,7 @@ Get lock.
 =cut
 sub lock {
     my $self = shift;
+    $self->_check_ro();
     return lockf("$self->{dir}/lock");
 }
 
@@ -96,6 +103,7 @@ sub read_chunk {
     }
     if ($data and @$data) {
         # returning non-empty chunk, keeping this client locked until "commit" will be called
+        warn "locked";
         $self->{uncommited} = $uncommited;
     }
     return $data;

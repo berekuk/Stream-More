@@ -21,6 +21,7 @@ use Stream::Formatter::LinedStorable;
 use Stream::File::Cursor;
 use Stream::File;
 use Params::Validate qw(:all);
+use Carp;
 
 sub new {
     my ($class, $dir, $id, $data) = validate_pos(@_, 1, { type => SCALAR }, { type => SCALAR, regex => qr/^\d+$/ }, { type => ARRAYREF });
@@ -41,22 +42,36 @@ Construct chunk object corresponding to existing chunk.
 
 =cut
 sub load {
-    my ($class, $dir, $id) = validate_pos(@_, 1, { type => SCALAR }, { type => SCALAR, regex => qr/^\d+$/ });
+    my ($class, $dir, $id, @opts) = validate_pos(@_, 1, { type => SCALAR }, { type => SCALAR, regex => qr/^\d+$/ }, { optional => 1, type => HASHREF });
+    my $opts = validate(@opts, {
+        read_only => { default => 0}
+    });
 
     return unless -e "$dir/$id.chunk"; # this check is unnecessary, but it reduces number of fanthom lock files
-    my $lock = lockf("$dir/$id.lock", { blocking => 0 }) or return;
+    my $lock;
+    unless ($opts->{read_only}) { 
+        $lock = lockf("$dir/$id.lock", { blocking => 0 }) or return;
+    };
     return unless -e "$dir/$id.chunk";
 
+    my $new = $opts->{read_only} ? "new_ro" : "new";
     my $in = Stream::Formatter::LinedStorable->wrap(
         Stream::File->new("$dir/$id.chunk")
-    )->stream(Stream::File::Cursor->new("$dir/$id.status"));
+    )->stream(Stream::File::Cursor->$new("$dir/$id.status"));
 
     return bless {
         in => $in,
+        read_only => $opts->{read_only},
         lock => $lock,
         id => $id,
         dir => $dir,
     } => $class;
+}
+
+sub _check_ro {
+    my $self = shift;
+    $Carp::CarpLevel = 1;
+    croak "Stream is read only" if $self->{read_only};
 }
 
 sub read {
@@ -66,6 +81,7 @@ sub read {
 
 sub commit {
     my $self = shift;
+    $self->_check_ro();
     return $self->{in}->commit;
 }
 
@@ -86,6 +102,7 @@ Remove chunk and all related files.
 =cut
 sub remove {
     my $self = shift;
+    $self->_check_ro();
     my $prefix = "$self->{dir}/$self->{id}";
     xunlink("$prefix.chunk");
     xunlink("$prefix.status");

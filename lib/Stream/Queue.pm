@@ -82,6 +82,7 @@ sub new {
         format => { default => 'storable' },
         autoregister => { default => 1 },
         gc_period => { default => 300 },
+        read_only => { default => 0 }, #TODO: 0, 1, and undef by default = auto-upgrade
         max_chunk_size => { default => 50 * 1024 * 1024, regex => qr/^\d+$/ },
         max_chunk_count => { default => 100, regex => qr/^\d+$/ },
     });
@@ -103,9 +104,18 @@ sub new {
         max_chunk_count => $self->{max_chunk_count},
     });
     bless $self => $class;
-    $self->try_convert;
-    $self->try_gc;
+    unless ($self->{read_only}) {
+        $self->try_convert;
+        $self->try_gc;
+    }
     return $self;
+}
+
+sub _check_ro ($) {
+    my ($self) = @_;
+    if ($self->{read_only}) {
+        die "Stream is read only";
+    }
 }
 
 =item B<< write($item) >>
@@ -117,6 +127,7 @@ Item can be any string or serializable structure, but it can't be C<undef>.
 =cut
 sub write($$) {
     my ($self, $item) = @_;
+    $self->_check_ro();
     unless (defined $item) {
         croak "Can't write undef";
     }
@@ -133,6 +144,7 @@ Commit written items.
 =cut
 sub commit {
     my $self = shift;
+    $self->_check_ro();
     unless ($self->{out}) {
         DEBUG "Nothing to commit";
         return;
@@ -152,6 +164,8 @@ Once registered, client must read queue regularly; otherwise queue will become o
 sub register_client {
     my $self = shift;
     my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
+    $self->_check_ro();
+
     my $status = $self->meta; # global lock
     if ($self->has_client($client)) {
         return; # already registered
@@ -169,6 +183,7 @@ Unregister client named C<$client_name>.
 =cut
 sub unregister_client {
     my $self = shift;
+    $self->_check_ro();
     my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
     my $status = $self->meta; # global lock
     unless ($self->has_client($client)) {
@@ -206,6 +221,7 @@ sub stream {
         Stream::Queue::In->new({
             storage => $self,
             client => $client,
+            read_only => $self->{read_only},
         }) => "$self->{dir}/clients/$client/buffer",
     );
 }

@@ -65,23 +65,34 @@ sub new {
     my $self = validate(@options, {
         format => { default => 'storable' },
         gc_period => { default => 300 },
+        read_only => { default => 0 },
     });
     unless ($self->{format} eq 'storable') {
         croak "Only 'storable' format is supported";
     }
     $self->{in} = $in;
     $self->{dir} = $dir;
-    unless (-d $dir) {
-        xmkdir($dir);
-    }
 
     $self->{prev_chunks} = {};
     $self->{uncommited} = 0;
     bless $self => $class;
 
-    $self->try_gc;
+    unless (-d $dir) {
+        $self->_check_ro();
+        xmkdir($dir);
+    }
+
+    unless ($self->{read_only}) {
+        $self->try_gc;
+    }
 
     return $self;
+}
+
+sub _check_ro {
+    my $self = shift;
+    $Carp::CarpLevel = 1;
+    croak "Stream is read only" if $self->{read_only};
 }
 
 =item B<< meta() >>
@@ -93,6 +104,7 @@ It's implemented as simple persistent, so it also works as global exclusive queu
 =cut
 sub meta {
     my $self = shift;
+    $self->_check_ro(); # read_only meta is not currently of any use
     return Yandex::Persistent->new("$self->{dir}/meta", { auto_commit => 0, format => 'json' });
 }
 
@@ -103,11 +115,13 @@ Get shared lock. All rw operations should take it, so gc would not interfere wit
 =cut
 sub lock {
     my $self = shift;
+    $self->_check_ro();
     return lockf("$self->{dir}/lock", { shared => 1 });
 }
 
 sub _next_id {
     my $self = shift;
+    $self->_check_ro();
     my $status = $self->meta;
     $status->{id} ||= 0;
     $status->{id}++;
@@ -124,7 +138,7 @@ sub _chunk2id {
 
 sub _new_chunk {
     my $self = shift;
-
+    $self->_check_ro();
     my $lock = $self->lock;
 
     my $chunk_size = $self->{uncommited} + 1;
@@ -149,7 +163,7 @@ sub _next_chunk {
 
         # this line can create lock file for already removed chunk, which will be removed only at next gc()
         # TODO - think how we can fix it
-        my $chunk = Stream::In::DiskBuffer::Chunk->load($self->{dir}, $id) or return;
+        my $chunk = Stream::In::DiskBuffer::Chunk->load($self->{dir}, $id, { read_only => $self->{read_only} }) or return;
 
         DEBUG "Reading $chunk_name";
         $self->{chunk} = $chunk;
@@ -169,10 +183,11 @@ sub _next_chunk {
     }
 
     # no chunks left
-    my $new_chunk_id = $self->_new_chunk or return;
-    $try_chunk->("$self->{dir}/$new_chunk_id.chunk") and return 1;
-
-    return;
+    unless ($self->{read_only}) {
+        my $new_chunk_id = $self->_new_chunk or return;
+        $try_chunk->("$self->{dir}/$new_chunk_id.chunk") and return 1;
+    } 
+    return; 
 }
 
 =item B<< read() >>
@@ -187,14 +202,25 @@ sub read {
 
     while () {
         unless ($self->{chunk}) {
-            $self->_next_chunk or return undef;
+            unless ($self->_next_chunk()) {
+                if ($self->{read_only} and not $self->{chunk_in}) {
+                    $self->{chunk} = $self->{in}; # ah yeah! streams... yummy!
+                    $self->{chunk_in} = 1;
+                } else {
+                    return;
+                }
+            }
         }
         my $item = $self->{chunk}->read;
         unless (defined $item) {
             # chunk is over
-            $self->{prev_chunks}{ $self->{chunk}->id } = $self->{chunk};
-            delete $self->{chunk};
-            next;
+            unless ($self->{chunk_in}) {
+                $self->{prev_chunks}{ $self->{chunk}->id } = $self->{chunk};
+                delete $self->{chunk};
+                next;
+            } else {
+                return;
+            }
         }
         $self->{uncommited}++;
         return $item;
@@ -209,7 +235,7 @@ Save positions from all read chunks; cleanup queue.
 =cut
 sub commit {
     my $self = shift;
-
+    $self->_check_ro();
     DEBUG "Commiting $self->{dir}";
 
     if ($self->{chunk}) {
@@ -224,6 +250,27 @@ sub commit {
     return;
 }
 
+=item B<< lag() >>
+
+Lag
+
+=cut
+
+sub lag {
+    my $self = shift;
+    my $lag = $self->{in}->lag();
+
+    my @chunk_files = glob $self->{dir}."/*.chunk";
+    for my $chunk_file (@chunk_files) {
+        my $id = $self->_chunk2id($chunk_file);
+        next if $self->{prev_chunks}{$id};
+        my $chunk = Stream::In::DiskBuffer::Chunk->load($self->{dir}, $id, { read_only => 1 }) or next; # always read_only!
+        $lag += $chunk->lag();
+    }
+
+    return $lag;
+}
+
 =item B<< try_gc() >>
 
 Do garbage collecting if it's necessary.
@@ -231,7 +278,7 @@ Do garbage collecting if it's necessary.
 =cut
 sub try_gc {
     my $self = shift;
-    if ($self->{gc_timestamp_cached} and time < $self->{gc_timestamp_cached} + $self->{gc_period}) {
+    if ($self->{read_only} or $self->{gc_timestamp_cached} and time < $self->{gc_timestamp_cached} + $self->{gc_period}) {
         return;
     }
 
@@ -256,6 +303,7 @@ Cleanup lost files.
 =cut
 sub gc {
     my $self = shift;
+    $self->_check_ro();
     my $lock = $self->lock;
     $lock->unshare;
     opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";
