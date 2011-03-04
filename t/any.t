@@ -10,7 +10,7 @@ use Test::Exception;
 use lib 'lib';
 
 use Stream::Out::Any;
-use Stream::Simple qw(array_seq);
+use Stream::Simple qw(array_seq code_out);
 use Streams;
 
 sub balance_three :Test(4) {
@@ -20,7 +20,7 @@ sub balance_three :Test(4) {
     my $out = Stream::Out::Any->new([
         map {
             my $i = $_;
-            processor(sub { push @{$v[$i]}, shift() });
+            code_out(sub { push @{$v[$i]}, shift() });
         } (0..2)
     ]);
 
@@ -47,10 +47,10 @@ sub balance_two :Test(3) {
         (
             map {
                 my $i = $_;
-                processor(sub { push @{$v[$i]}, shift() }),
+                code_out(sub { push @{$v[$i]}, shift() }),
             } (0..1)
         ),
-        processor(sub { die }),
+        code_out(sub { die }),
     ]);
 
     while (my $item = $in->read) {
@@ -82,7 +82,7 @@ sub invalidate :Test(3) {
         (
             map {
                 my $i = $_;
-                processor(sub { push @{$v[$i]}, shift() }),
+                code_out(sub { push @{$v[$i]}, shift() }),
             } (0..1)
         ),
         t::Stream->new,
@@ -105,7 +105,7 @@ sub invalidate :Test(3) {
 
 sub invalidate_all :Test(1) {
     my $out = Stream::Out::Any->new([
-        (processor(sub { die })) x 3
+        (code_out(sub { die })) x 3
     ]);
     dies_ok(sub {
         $out->write(1);
@@ -128,7 +128,7 @@ sub revalidate :Test(3) {
     my @data;
     my @data_rev;
     my $out = Stream::Out::Any->new([
-        processor(sub { push @data, shift }),
+        code_out(sub { push @data, shift }),
         t::RevStream->new(\@data_rev),
     ], {
         revalidate => 2,

@@ -17,6 +17,40 @@ Stream::Out::Any - write data into one of several output streams
     $multi_out->write($item2);
     $multi_out->commit;
 
+=head1 DESCRIPTION
+
+This is an output stream which balances all writes into several underlying output streams.
+
+If some output streams fail on write or on commit, all uncommited writes into them will be copied into other output streams.
+
+=head1 CONSTRUCTOR
+
+=over
+
+=item B<< new($targets) >>
+
+=item B<< new($targets, $options) >>
+
+Construct new C<< Stream::Out::Any >> object.
+
+C<$targets> should be an arrayref with output streams.
+
+C<$options> is an optional hashref with some of following fields:
+
+=over
+
+=item I< revalidate >
+
+If set, output streams which threw an exception on C<write> or C<commit> ill be banned only for the given number of seconds, and then this class will try to write to them and commit them again.
+
+=item I< shuffle >
+
+If set and false, writes to output streams will happen according to the order in which they are listed in C<$targets>.
+
+Otherwise (by default), order will be randomized.
+
+=back
+
 =cut
 
 use Yandex::Version '{{DEBIAN_VERSION}}';
@@ -28,6 +62,7 @@ use namespace::autoclean;
 use Params::Validate qw(:all);
 use Scalar::Util qw(blessed);
 use List::MoreUtils qw(all);
+use List::Util qw(shuffle);
 
 sub new {
     my $class = shift;
@@ -46,7 +81,11 @@ sub new {
 
     my $options = validate(@options, {
         revalidate => { type => SCALAR, regex => qr/^\d+$/, optional => 1 },
+        shuffle => { type => SCALAR, default => 1 },
     });
+
+    $targets = [ shuffle @$targets ] if $options->{shuffle};
+
     my $total = @$targets;
     my $self = bless {
         targets => $targets,
@@ -132,13 +171,18 @@ sub commit {
                 $target->commit();
             };
             if ($@) {
-                WARN "Commiting target #$i failed: $@";
+                # this line logged target number ($i) in earlier releases, but after 'shuffle' feature was introduced it became useless
+                # (we'll have to store original target ids if we'll ever want to log target numbers again)
+                WARN "Commiting target $target failed: $@";
+
                 $self->_mark_invalid($i);
             }
             $self->{buffers}[$i] = [];
         }
     } while ( grep { @$_ } @{ $self->{buffers} } );
 }
+
+=back
 
 =head1 AUTHOR
 
