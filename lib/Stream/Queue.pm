@@ -104,18 +104,15 @@ sub new {
         max_chunk_count => $self->{max_chunk_count},
     });
     bless $self => $class;
-    unless ($self->{read_only}) {
-        $self->try_convert;
-        $self->try_gc;
-    }
+    $self->try_convert;
+    $self->try_gc;
     return $self;
 }
 
-sub _check_ro ($) {
-    my ($self) = @_;
-    if ($self->{read_only}) {
-        die "Stream is read only";
-    }
+sub _check_ro {
+    my $self = shift;
+    local $Carp::CarpLevel = 1;
+    croak "Storage is read only" if $self->{read_only};
 }
 
 =item B<< write($item) >>
@@ -183,8 +180,8 @@ Unregister client named C<$client_name>.
 =cut
 sub unregister_client {
     my $self = shift;
-    $self->_check_ro();
     my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
+    $self->_check_ro();
     my $status = $self->meta; # global lock
     unless ($self->has_client($client)) {
         WARN "No such client '$client', can't unregister";
@@ -214,6 +211,9 @@ sub stream {
     unless ($self->has_client($client)) {
         unless ($self->{autoregister}) {
             croak "Client $client not found and autoregister is disabled";
+        } 
+        if ($self->{read_only}) {
+            croak "Client $client not found and storage is read only";
         }
         $self->register_client($client);
     }
@@ -223,6 +223,9 @@ sub stream {
             client => $client,
             read_only => $self->{read_only},
         }) => "$self->{dir}/clients/$client/buffer",
+        {
+            read_only => $self->{read_only},
+        }
     );
 }
 
@@ -299,7 +302,8 @@ Do garbage collecting if it's necessary.
 =cut
 sub try_gc {
     my $self = shift;
-    if ($self->{gc_timestamp_cached} and time < $self->{gc_timestamp_cached} + $self->{gc_period}) {
+
+    if ($self->{read_only} or $self->{gc_timestamp_cached} and time < $self->{gc_timestamp_cached} + $self->{gc_period}) {
         return;
     }
 
@@ -353,6 +357,7 @@ Convert queue from old format. All client positions will be lost, sorry.
 sub convert {
     my ($self, $meta) = @_;
     INFO "Converting from version format 1";
+    $self->_check_ro();
 
     my @client_names = $self->client_names;
     for my $client (@client_names) {
@@ -398,14 +403,17 @@ This method is called automatically from time to time, so usually you shouldn't 
 =cut
 sub gc {
     my ($self, $meta) = @_;
+    $self->_check_ro();
     $meta ||= $self->meta; # queue is locked when gc is active
     my $cd_lock = $self->{chunk_dir}->lock; # chunk dir is locked too
+    DEBUG "Starting gc";
 
     my @chunks_info = $self->{chunk_dir}->chunks_info;
     my @clients = $self->clients;
 
     CHUNK:
     for my $info (@chunks_info) {
+        DEBUG "processing chunk $info->{id}";
         my $lock = lockf($info->{lock_file}, { blocking => 0 }) or next;
         for my $client (@clients) {
             my $pos = $client->in->pos($info->{id});
@@ -414,6 +422,7 @@ sub gc {
             next CHUNK if not defined $lag;
             next CHUNK if $lag > 0;
         }
+        DEBUG "Removing $info->{file}";
         # chunk can be safely removed
         xunlink($info->{lock_file}) if -e $info->{lock_file}; # theoretically, previous gc could fail after this unlink and before unlinking chunk itself
         xunlink($info->{file});

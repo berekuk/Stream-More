@@ -194,9 +194,9 @@ sub gc :Test(2) {
 
     my $first_in = $queue->stream('first');
     my $second_in = $queue->stream('second');
-    for (1..100) {
+    for (1..20) {
         for my $in ($first_in, $second_in) {
-            $in->read;
+            $in->read for (1..5);
             $in->commit;
         }
     }

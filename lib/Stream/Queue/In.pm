@@ -81,17 +81,21 @@ sub lock {
 }
 
 sub _info2in {
-    my ($self, $info) = @_;
+    my ($self, $info, $opts) = @_;
+    $opts ||= {};
+    $opts->{cache} = 1 unless defined $opts->{cache};
 
-    my $in;
-    if ($self->{uncommited} and $self->{uncommited}{ $info->{in} }) {
-        $in = $self->{uncommited}->{in}{ $info->{id} }; # it can already be in "uncommited" cache
-    }
-    else {
-        # otherwise, create it now
-        $in ||= Stream::Formatter::LinedStorable->wrap(Stream::File->new($info->{file}))->stream(
-            Stream::File::Cursor->new("$self->{dir}/$info->{id}.pos"));
-    }
+    my $cached = $self->{uncommited}{in}{ $info->{id} }; # it can already be in "uncommited" cache
+    return $cached if $cached;
+
+    # otherwise, create it now
+    my $file_in = eval { Stream::File->new($info->{file}) }; # it probably means that gc already removed it
+    return unless $file_in;
+
+    my $in = Stream::Formatter::LinedStorable->wrap($file_in)->stream(Stream::File::Cursor->new("$self->{dir}/$info->{id}.pos"));
+    die unless $opts->{cache};
+    $self->{uncommited}{in}{ $info->{id} } = $in if $opts->{cache};
+
     return $in;
 }
 
@@ -99,12 +103,8 @@ sub lag {
     my $self = shift;
     my $lag = 0;
     for my $info ($self->{storage}->chunks_info) {
-
-        # If _info2in fails, it probably means that gc already removed it,
-        # so this eval just prevents us from occasional meaningless
-        # exceptions... at least until Stream::File will start to take locks,
-        # and then we are screwed and will get random values on every call.
-        my $in = eval { $self->_info2in($info) };
+        
+        my $in = $self->_info2in($info, { cache => 0 });
         next unless $in;
 
         $lag += $in->lag;
@@ -116,15 +116,16 @@ sub read_chunk {
     my $self = shift;
     my $chunk_size = shift;
 
-    my $uncommited = $self->{uncommited} || {};
-    $uncommited->{lock} = $self->lock;
+    $self->{uncommited} ||= {};
+    my $lock;
+    $lock = $self->lock unless $self->{uncommited}->{lock} or $self->{read_only};
 
     my @chunks_info = $self->{storage}->chunks_info;
 
     my $data;
     for my $info (@chunks_info) {
         my $in = $self->_info2in($info); # find in cache or open new chunk
-        $uncommited->{in}{ $info->{id} } ||= $in; # put in cache immediately
+        next unless $in;
 
         my $portion_size = $chunk_size;
         $portion_size -= @$data if $data;
@@ -132,9 +133,9 @@ sub read_chunk {
         push @$data, @$portion_data;
         last if @$data >= $chunk_size;
     }
-    if ($data and @$data) {
+    if ($data and @$data and $lock) {
         # returning non-empty chunk, keeping this client locked until "commit" will be called
-        $self->{uncommited} = $uncommited;
+        $self->{uncommited}->{lock} = $lock;
     }
     return $data;
 }
@@ -155,6 +156,7 @@ sub read {
 
 sub commit {
     my $self = shift;
+    $self->_check_ro();
     return unless $self->{uncommited};
     for (values %{ $self->{uncommited}{in} }) {
         $_->commit;
@@ -185,6 +187,7 @@ Cleanup lost files.
 =cut
 sub gc {
     my $self = shift;
+    $self->_check_ro();
     my $lock = $self->lock;
     opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";
     while (my $file = readdir $dh) {
