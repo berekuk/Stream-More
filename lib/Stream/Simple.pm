@@ -24,10 +24,11 @@ Stream::Simple - simple procedural-style constructors of some streams
 =cut
 
 use parent qw(Exporter);
-our @EXPORT_OK = qw/ array_seq array_in code_out memory_storage /;
+our @EXPORT_OK = qw/ array_seq array_in code_in code_out memory_storage /;
 
 use Carp;
 use Stream::Simple::ArrayIn;
+use Stream::Simple::CodeIn;
 use Stream::MemoryStorage;
 use Stream::Simple::CodeOut;
 use Params::Validate qw(:all);
@@ -40,6 +41,16 @@ Creates stream which shifts items from specified list and returns them as stream
 sub array_in($) {
     my ($list) = validate_pos(@_, { type => ARRAYREF });
     return Stream::Simple::ArrayIn->new($list);
+}
+
+=item B< code_in($coderef) >
+
+Creates input stream which generates items by calling given callback.
+
+=cut
+sub code_in {
+    my ($callback) = validate_pos(@_, { type => CODEREF });
+    return Stream::Simple::CodeIn->new($callback);
 }
 
 =item B<array_seq($list)>

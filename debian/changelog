@@ -1,4 +1,4 @@
-libstream-more-perl (0.6.13) UNRELEASED; urgency=low
+libstream-more-perl (0.6.13) unstable; urgency=low
 
   [ Vyacheslav Matjukhin (No comments) ]
   * Stream::Out::Any:
@@ -8,7 +8,11 @@ libstream-more-perl (0.6.13) UNRELEASED; urgency=low
   [ Andrei Mishchenko ]
   * Stream::Queue read_only mode
 
- -- Andrei Mishchenko <druxa@yandex-team.ru>  Fri, 04 Mar 2011 19:21:54 +0300
+  [ Vyacheslav Matjukhin (No comments) ]
+  * Stream::Simple: code_in() function
+  * Stream::Bin::Filter removed (it got replaced by Yandex::Pumper)
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Wed, 09 Mar 2011 22:30:10 +0300
 
 libstream-more-perl (0.6.12) unstable; urgency=low
 
