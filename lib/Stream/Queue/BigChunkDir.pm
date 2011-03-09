@@ -3,12 +3,15 @@ package Stream::Queue::BigChunkDir;
 use strict;
 use warnings;
 
-use Stream::Formatter::LinedStorable;
-use Stream::File;
 use Yandex::Persistent;
 use Yandex::Logger;
 use Yandex::Lockf;
 use Params::Validate qw(:all);
+
+use Stream::Formatter::LinedStorable;
+use Stream::File;
+
+use Stream::Queue::BigChunkFile;
 
 =head1 NAME
 
@@ -63,20 +66,6 @@ sub meta_ro {
         $meta->commit;
     }
     return Yandex::Persistent->new($file, { read_only => 1, format => 'json' });
-}
-
-{
-    package Stream::Queue::BigChunkFile;
-    use parent qw(Stream::File);
-    use Yandex::Lockf 3.0;
-    sub _new {
-        my ($class, $dir, $id) = @_;
-        my $append_lock = lockf("$dir/$id.append_lock", { shared => 1, blocking => 0 });
-        die "Can't take append lock" if not $append_lock; # this exception should never happen - we already have meta lock at this moment
-        my $self = $class->SUPER::new("$dir/$id.chunk");
-        $self->{chunk_append_lock} = $append_lock;
-        return $self;
-    }
 }
 
 =item B<< lock() >>
@@ -136,7 +125,7 @@ sub out {
             next;
         }
     }
-    my $out = Stream::Queue::BigChunkFile->_new($self->{dir}, $id);
+    my $out = Stream::Queue::BigChunkFile->new($self->{dir}, $id);
     return Stream::Formatter::LinedStorable->wrap($out);
 }
 
