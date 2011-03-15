@@ -246,7 +246,7 @@ It's implemented as simple persistent, so it also works as global queue lock.
 =cut
 sub meta {
     my $self = shift;
-    return Yandex::Persistent->new("$self->{dir}/queue.meta", { auto_commit => 0, format => 'json' });
+    return Yandex::Persistent->new("$self->{dir}/queue.meta", { auto_commit => 0, format => 'json', read_only => $self->{read_only} });
 }
 
 =item B<< format() >>
@@ -330,6 +330,10 @@ sub try_convert {
     my $self = shift;
 
     my $meta = $self->meta;
+    return if $meta->{version} and $meta->{version} == 2;
+
+    $self->_check_ro();
+
     my $cd_meta = $self->{chunk_dir}->meta;
     if ($cd_meta->{id}) {
         if (not defined $meta->{version}) {
@@ -416,10 +420,8 @@ sub gc {
         DEBUG "processing chunk $info->{id}";
         my $lock = lockf($info->{lock_file}, { blocking => 0 }) or next;
         for my $client (@clients) {
-            my $pos = $client->in->pos($info->{id});
-            my $size = -s $info->{file};
-            my $lag = $size - $pos;
-            next CHUNK if not defined $lag;
+            my $lag = $client->in->lag();
+            next CHUNK if not defined $lag; #FIXME: O_o
             next CHUNK if $lag > 0;
         }
         DEBUG "Removing $info->{file}";

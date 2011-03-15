@@ -1,3 +1,9 @@
+libstream-more-perl (0.6.14) unstable; urgency=low
+
+  * Stream::Queue complete read_only support
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Tue, 15 Mar 2011 19:04:20 +0300
+
 libstream-more-perl (0.6.13) unstable; urgency=low
 
   [ Vyacheslav Matjukhin (No comments) ]

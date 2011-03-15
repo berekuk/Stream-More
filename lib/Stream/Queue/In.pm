@@ -91,9 +91,9 @@ sub _info2in {
     # otherwise, create it now
     my $file_in = eval { Stream::File->new($info->{file}) }; # it probably means that gc already removed it
     return unless $file_in;
-
-    my $in = Stream::Formatter::LinedStorable->wrap($file_in)->stream(Stream::File::Cursor->new("$self->{dir}/$info->{id}.pos"));
-    die unless $opts->{cache};
+    
+    my $new = $self->{read_only} ? "new_ro" : "new";
+    my $in = Stream::Formatter::LinedStorable->wrap($file_in)->stream(Stream::File::Cursor->$new("$self->{dir}/$info->{id}.pos"));
     $self->{uncommited}{in}{ $info->{id} } = $in if $opts->{cache};
 
     return $in;
@@ -176,7 +176,8 @@ sub pos {
     unless (-e $cursor_file) {
         return 0;
     }
-    my $cursor = Stream::File::Cursor->new($cursor_file);
+    my $new = $self->{read_only} ? "new_ro" : "new";
+    my $cursor = Stream::File::Cursor->$new($cursor_file);
     return $cursor->position;
 }
 

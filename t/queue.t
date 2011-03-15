@@ -81,6 +81,34 @@ sub read :Test(1) {
     is_deeply([ read_all($in) ], \@written, 'reading from queue');
 }
 
+sub lag :Test(3) {
+    fill_queue([ map { { str => "id$_" } } (1..100) ]);
+
+    my $queue = Stream::Queue->new({
+        dir => 'tfiles',
+    });
+
+    my $in = $queue->stream('client');
+    read_n($in, 50);
+    $in->commit;
+    my $lag = $in->lag();
+
+    cmp_ok($lag, ">", 0, "lag is positive");
+
+    $in = $queue->stream('client');
+
+    is($in->lag(), $lag, "lag rechecked");
+
+    system("chmod -w -R tfiles"); die if $?;
+    $queue = Stream::Queue->new({
+        dir => 'tfiles',
+        read_only => 1,
+    });
+    $in = $queue->stream('client');
+    is($in->lag(), $lag, "lag read_only");
+    system("chmod u+w -R tfiles"); die if $?;
+}
+
 sub read_and_commits :Test(1) {
     my @written = fill_queue(
         [ map { { id => $_, str => "id$_" } } (1..10) ],
