@@ -36,12 +36,15 @@ C<Stream::Queue> and C<Stream::Queue::In> implement local file-based FIFO queue 
 
 =cut
 
-use parent qw(Stream::Storage Stream::Storage::Role::ClientList);
+use parent qw(
+    Stream::Storage
+    Stream::Storage::Role::ClientList
+);
 
 use Yandex::Version '{{DEBIAN_VERSION}}';
 
 use Yandex::Logger;
-use Yandex::Lockf;
+use Yandex::Lockf 3.0;
 
 use Params::Validate;
 use File::Path qw(rmtree);

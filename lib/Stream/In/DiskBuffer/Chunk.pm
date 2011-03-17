@@ -98,6 +98,11 @@ sub read {
     return $self->{in}->read;
 }
 
+sub read_chunk {
+    my $self = shift;
+    return $self->{in}->read_chunk(@_);
+}
+
 sub commit {
     my $self = shift;
     $self->_check_ro();

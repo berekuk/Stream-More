@@ -190,9 +190,11 @@ Read new item from queue.
 This method chooses next unlocked chunk and reads it from position saved from last invocation in persistent file C<$queue_dir/clients/$client_name/$chunk_id.status>.
 
 =cut
-sub read {
-    my $self = shift;
+sub read_chunk {
+    my ($self, $data_size) = @_;
 
+    my $remaining = $data_size;
+    my $result;
     while () {
         unless ($self->{chunk}) {
             unless ($self->_next_chunk()) {
@@ -204,20 +206,31 @@ sub read {
                 }
             }
         }
-        my $item = $self->{chunk}->read;
-        unless (defined $item) {
+        my $data = $self->{chunk}->read_chunk($remaining);
+        unless (defined $data) {
             # chunk is over
             unless ($self->{chunk_in}) {
                 $self->{prev_chunks}{ $self->{chunk}->id } = $self->{chunk};
                 delete $self->{chunk};
                 next;
             } else {
-                return;
+                return $result;
             }
         }
         $self->{uncommited}++;
-        return $item;
+        $result ||= [];
+        push @$result, @$data;
+        $remaining -= @$data;
+        last if $remaining <= 0;
     }
+    return $result;
+}
+
+sub read {
+    my $self = shift;
+    my $chunk = $self->read_chunk(1);
+    return unless $chunk;
+    return $chunk->[0];
 }
 
 
