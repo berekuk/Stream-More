@@ -1,0 +1,6 @@
+# vim: ft=perl
+
+use Stream::Formatter::JSON;
+
+my $format = Stream::Formatter::JSON->new;
+return sub { $format };
