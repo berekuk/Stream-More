@@ -56,6 +56,10 @@ sub stream {
     return Stream::Concat::In->new($old_in, $new_in);
 }
 
+=head1 SEE ALSO
+
+C<Stream::Concat::In> - concatenate any number of input streams
+
 =head1 AUTHOR
 
 Vyacheslav Matjukhin <mmcleric@yandex-team.ru>

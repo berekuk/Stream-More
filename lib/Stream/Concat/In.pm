@@ -5,52 +5,60 @@ use warnings;
 
 =head1 NAME
 
-Stream::Concat::In - composite input stream
+Stream::Concat::In - concatenate several input streams
 
 =cut
 
 use parent qw(Stream::In);
 
 use Params::Validate;
+use Carp;
 
 sub new {
     my $class = shift;
-    my ($old, $new) = validate_pos(@_, { isa => 'Stream::In' }, { isa => 'Stream::In' });
+
+    my @in = @_;
+    croak "At least one input stream must be specified" unless @in;
+    for (@in) {
+        croak "Invalid argument '$_'" unless $_->isa('Stream::In');
+    }
+
     return bless {
-        old => $old,
-        new => $new,
+        in => \@in,
+        current => 0,
     } => $class;
 }
 
 sub read {
     my $self = shift;
-    unless ($self->{old_depleted}) {
-        my $item = $self->{old}->read;
+
+    while (1) {
+        return if $self->{current} >= @{ $self->{in} };
+        my $item = $self->{in}[ $self->{current} ]->read;
         return $item if defined $item;
-        $self->{old_depleted} = 1;
+        $self->{current}++;
     }
-    return $self->{new}->read;
 }
 
 sub read_chunk {
     my $self = shift;
-    unless ($self->{old_depleted}) {
-        my $chunk = $self->{old}->read_chunk(@_);
+
+    while (1) {
+        return if $self->{current} >= @{ $self->{in} };
+        my $chunk = $self->{in}[ $self->{current} ]->read_chunk(@_);
         return $chunk if defined $chunk;
-        $self->{old_depleted} = 1;
+        $self->{current}++;
     }
-    return $self->{new}->read_chunk(@_);
 }
 
 sub commit {
     my $self = shift;
-    $self->{old}->commit;
-    $self->{new}->commit;
+    $_->commit for @{ $self->{in} };
 }
 
 =head1 SEE ALSO
 
-You are probably looking for L<Stream::Concat::Storage>.
+L<Stream::Concat>
 
 =head1 AUTHOR
 
@@ -59,4 +67,3 @@ Vyacheslav Matjukhin <mmcleric@yandex-team.ru>
 =cut
 
 1;
-
