@@ -28,6 +28,7 @@ sub commit {
 }
 
 sub DESTROY {
+    local $@;
     my $self = shift;
     $self->{storage}->_unlock_client($self->{client});
 }
