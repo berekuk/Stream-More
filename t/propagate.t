@@ -30,7 +30,7 @@ use Stream::Propagate;
     $out->commit;
 
     is_deeply(\%uri2contents, {
-        'http://accept.stream.com:1248/write?name=blah&format=json' => [
+        'http://accept.stream.com:1248/accept?name=blah&format=json' => [
         q({"data2":"abc"}
 {"data2":{"y":6,"x":5}}
 ) # TODO - replace exact matching with regex since x/y order is unpredictable
@@ -92,7 +92,7 @@ use Stream::Propagate;
     $out->commit;
 
     is_deeply(\%uri2contents, {
-        'http://accept.stream.com:1248/write?name=blah&format=plain' => [
+        'http://accept.stream.com:1248/accept?name=blah&format=plain' => [
         q(abc
 def
 )
@@ -118,7 +118,7 @@ def
     $out->write({ x => 5, y => 6 });
     $out->commit;
 
-    my $expected_url = 'http://accept.stream.com:1248/write?name=blah&format=storable';
+    my $expected_url = 'http://accept.stream.com:1248/accept?name=blah&format=storable';
     is_deeply( [ keys %uri2contents ], [ $expected_url ], 'url when POSTing in storable format');
 
     my @lines = split /\n/, $uri2contents{$expected_url}[0];

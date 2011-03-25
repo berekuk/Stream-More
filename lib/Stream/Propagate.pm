@@ -125,7 +125,7 @@ sub commit {
     return unless $self->{buffer} and @{ $self->{buffer} };
 
     my $uri = URI->new($self->{endpoint});
-    $uri->path('write');
+    $uri->path('accept');
     $uri->query_form(
         name => $self->{name},
         format => $self->{format},

@@ -1,9 +1,10 @@
-libstream-more-perl (0.6.16) UNRELEASED; urgency=low
+libstream-more-perl (0.6.15) UNRELEASED; urgency=low
 
   * Stream::Queue, Stream::In::DiskBuffer: performance improvements
   * Stream::Concat::In: support for arbitrary number of input streams
   * json format in in catalog
   * Stream::MemoryStorage::In: destructor localizes $@
+  * Stream::Propatate uses /accept handle instead of deprecated /write
 
  -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Fri, 25 Mar 2011 20:53:04 +0300
 
