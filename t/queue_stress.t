@@ -51,10 +51,11 @@ sub stress_run {
 
         while (1) {
             my $ok = eval {
-                $params->{code}->();
+                $params->{code}->($id);
                 1;
             };
-            next unless $ok;
+            next if $@ =~ /^stress break/;
+            die $@ unless $ok;
             my $status = $id2status->($id);
             if ($status->{iterations_left} <= 0) {
                 $status->{done} = 1;
@@ -75,13 +76,14 @@ sub stress_run {
             #print "stress_run is over\n";
             last;
         }
+        die "Child exited with error '$?'" if $?;
         #print "child $result is over\n";
     }; # TODO - randomly kill childs
 }
 
 sub stress_break {
     my $probability = shift || 0.001;
-    die if rand() < $probability;
+    die "stress break" if rand() < $probability; # TODO - type exception
 }
 
 # stress writing (3)
@@ -188,3 +190,50 @@ sub stress_break {
     is_deeply([ sort keys %ids ], [ sort map { "id$_" } 1..$total ], 'all ids read from queue');
 }
 
+# stress rw (1)
+{
+    PPB::Test::TFiles::import();
+
+    my $get_queue = sub {
+        Stream::Queue->new({ dir => 'tfiles/queue', max_chunk_size => 10_000, max_chunk_count => 1000 })
+    };
+
+    stress_run({
+        code => sub {
+            my $id = shift;
+            if ($id <= 5) {
+                # reading
+                sleep 0.001;
+                my $queue = $get_queue->();
+                stress_break();
+                my $in = $queue->stream('client');
+                for (1..100) {
+                    my $item = $in->read() or last;
+                }
+                $in->commit;
+            }
+            elsif ($id <= 9) {
+                # writing
+                my $out = $get_queue->();
+                stress_break();
+                for my $portion (1..10) {
+                    for my $id (1..10) {
+                        $out->write({ id => $id, time => time, data => join '', map { rand } 1..100 });
+                        stress_break();
+                    }
+                    $out->commit;
+                    stress_break();
+                }
+            }
+            else {
+                # gc
+                diag("gc started");
+                $get_queue->()->gc;
+                diag("gc done");
+                sleep 0.1;
+            }
+        },
+        parallel => 10,
+        invoke_count => 10,
+    });
+}

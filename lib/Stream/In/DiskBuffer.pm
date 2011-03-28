@@ -288,6 +288,7 @@ Cleanup lost files.
 =cut
 sub gc {
     my ($self, $meta) = @_;
+    $meta ||= $self->meta;
     $self->_check_ro();
 
     opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";

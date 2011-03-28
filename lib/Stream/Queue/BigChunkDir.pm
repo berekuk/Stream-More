@@ -129,6 +129,16 @@ sub out {
     return Stream::Formatter::LinedStorable->wrap($out);
 }
 
+=item B<< next_out() >>
+
+Move chunk counter to the next chunk.
+
+=cut
+sub next_out {
+    my $self = shift;
+    $self->meta->{id}++;
+}
+
 =item B<< chunks_info() >>
 
 Get info about all chunks in dir.
