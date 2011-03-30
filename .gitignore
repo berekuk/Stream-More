@@ -1,7 +1,5 @@
 /tfiles
-/blib
-/Makefile
-/pm_to_blib
-/MANIFEST.bak
 /nytprof*
 /debuild
+/Stream-More-*
+/.build
