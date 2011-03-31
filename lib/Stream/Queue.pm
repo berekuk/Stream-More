@@ -1,8 +1,5 @@
 package Stream::Queue;
 
-use strict;
-use warnings;
-
 =head1 NAME
 
 Stream::Queue - output stream supporting parallel writing
@@ -36,12 +33,11 @@ C<Stream::Queue> and C<Stream::Queue::In> implement local file-based FIFO queue 
 
 =cut
 
-use parent qw(
-    Stream::Storage
-    Stream::Storage::Role::ClientList
-);
+use Moose;
+use MooseX::NonMoose;
+extends 'Stream::Storage', 'Stream::Storage::Role::ClientList';
 
-use Yandex::Version '{{DEBIAN_VERSION}}';
+use namespace::autoclean;
 
 use Yandex::Logger;
 use Yandex::Lockf 3.0;
@@ -58,6 +54,8 @@ use Yandex::X 1.1.0;
 use Stream::In::DiskBuffer;
 use Stream::Queue::In;
 use Stream::Queue::BigChunkDir;
+
+use Moose::Util::TypeConstraints;
 
 our $CURRENT_VERSION = 2;
 
@@ -78,44 +76,96 @@ Default is true.
 =back
 
 =cut
-sub new {
-    my $class = shift;
-    my $self = validate(@_, {
-        dir => 1,
-        format => { default => 'storable' },
-        autoregister => { default => 1 },
-        gc_period => { default => 300 },
-        read_only => { default => 0 }, #TODO: 0, 1, and undef by default = auto-upgrade
-        max_chunk_size => { default => 50 * 1024 * 1024, regex => qr/^\d+$/ },
-        max_chunk_count => { default => 100, regex => qr/^\d+$/ },
-    });
-    unless ($self->{format} eq 'storable') {
-        croak "Only 'storable' format is supported";
-    }
-    $self->{dir} = File::Spec->rel2abs($self->{dir});
+has 'dir' => ( is => 'rw', isa => 'Str', required => 1 ); # FIXME - this shouldn't be 'rw', but we need to call rel2abs in BUILD
+
+has 'format' => (
+    is => 'ro',
+    isa => subtype( as 'Str', where { $_ eq 'storable' } ),
+    default => 'storable',
+);
+
+has 'autoregister' => (
+    is => 'ro',
+    isa => 'Bool',
+    default => 1,
+);
+
+has 'gc_period' => (
+    is => 'ro',
+    isa => 'Int',
+    default => 300,
+);
+
+has 'read_only' => (
+    is => 'ro',
+    isa => 'Bool',
+    default => 0,
+); #TODO: 0, 1, and undef by default = auto-upgrade
+
+has 'max_chunk_size' => (
+    is => 'ro',
+    isa => 'Int',
+    default => 50 * 1024 * 1024,
+);
+
+has 'max_chunk_count' => (
+    is => 'ro',
+    isa => 'Int',
+    default => 100,
+);
+
+has '_gc_timestamp_cached' => (
+    is => 'rw',
+    isa => 'Int',
+    init_arg => undef,
+);
+
+has 'chunk_dir' => (
+    is => 'ro',
+    isa => class_type('Stream::Queue::BigChunkDir'),
+    default => sub {
+        my $self = shift;
+
+        return Stream::Queue::BigChunkDir->new({
+            dir => $self->dir,
+            max_chunk_size => $self->max_chunk_size,
+            max_chunk_count => $self->max_chunk_count,
+        });
+    },
+    lazy => 1,
+    init_arg => undef,
+);
+
+has 'out' => (
+    is => 'ro',
+    isa => class_type('Stream::Out'),
+    lazy_build => 1,
+);
+
+sub _build_out {
+    my $self = shift;
+    $self->chunk_dir->out;
+}
+
+sub BUILD {
+    my $self = shift;
+    $self->dir( File::Spec->rel2abs($self->dir) );
     # TODO - check that dir is writable
-    # TODO - create dir?
-    unless (-d $self->{dir}) {
-        xmkdir($self->{dir});
+    unless (-d $self->dir) {
+        xmkdir($self->dir);
     }
-    unless (-d "$self->{dir}/clients") {
-        xmkdir("$self->{dir}/clients");
+    unless (-d $self->dir."/clients") {
+        xmkdir($self->dir."/clients");
     }
-    $self->{chunk_dir} = Stream::Queue::BigChunkDir->new({
-        dir => $self->{dir},
-        max_chunk_size => $self->{max_chunk_size},
-        max_chunk_count => $self->{max_chunk_count},
-    });
-    bless $self => $class;
+    $self->chunk_dir;
     $self->try_convert;
     $self->try_gc;
-    return $self;
 }
 
 sub _check_ro {
     my $self = shift;
     local $Carp::CarpLevel = 1;
-    croak "Storage is read only" if $self->{read_only};
+    croak "Storage is read only" if $self->read_only;
 }
 
 =item B<< write($item) >>
@@ -131,10 +181,7 @@ sub write($$) {
     unless (defined $item) {
         croak "Can't write undef";
     }
-    unless (exists $self->{out}) {
-        $self->{out} = $self->{chunk_dir}->out;
-    }
-    $self->{out}->write($item);
+    $self->out->write($item);
 }
 
 =item B<< commit() >>
@@ -145,12 +192,12 @@ Commit written items.
 sub commit {
     my $self = shift;
     $self->_check_ro();
-    unless ($self->{out}) {
+    unless ($self->has_out) {
         DEBUG "Nothing to commit";
         return;
     }
-    $self->{out}->commit;
-    delete $self->{out}; # out recreated after every commit, otherwise we would hold one old chunk opened for too long
+    $self->out->commit;
+    $self->clear_out; # out recreated after every commit, otherwise we would hold one old chunk opened for too long
     $self->try_gc;
 }
 
@@ -166,14 +213,14 @@ sub register_client {
     my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
     $self->_check_ro();
 
-    my $status = $self->meta; # global lock
+    my $status = $self->meta_persistent; # global lock
     if ($self->has_client($client)) {
         return; # already registered
     }
-    INFO "Registering $client at $self->{dir}";
-    xmkdir("$self->{dir}/clients/$client");
-    xmkdir("$self->{dir}/clients/$client/buffer");
-    xmkdir("$self->{dir}/clients/$client/pos");
+    INFO "Registering $client at ".$self->dir;
+    xmkdir($self->dir."/clients/$client");
+    xmkdir($self->dir."/clients/$client/buffer");
+    xmkdir($self->dir."/clients/$client/pos");
 }
 
 =item B<< unregister_client($client_name) >>
@@ -185,12 +232,12 @@ sub unregister_client {
     my $self = shift;
     my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
     $self->_check_ro();
-    my $status = $self->meta; # global lock
+    my $status = $self->meta_persistent; # global lock
     unless ($self->has_client($client)) {
         WARN "No such client '$client', can't unregister";
         return;
     }
-    rmtree("$self->{dir}/clients/$client");
+    rmtree($self->dir."/clients/$client");
 }
 
 =item B<< has_client($client_name) >>
@@ -201,7 +248,7 @@ Check whether queue has client C<$client_name> registered.
 sub has_client {
     my $self = shift;
     my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
-    unless (-d "$self->{dir}/clients/$client") {
+    unless (-d $self->dir."/clients/$client") {
         return;
     }
     return 1;
@@ -212,10 +259,10 @@ sub stream {
     my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
 
     unless ($self->has_client($client)) {
-        unless ($self->{autoregister}) {
+        unless ($self->autoregister) {
             croak "Client $client not found and autoregister is disabled";
         } 
-        if ($self->{read_only}) {
+        if ($self->read_only) {
             croak "Client $client not found and storage is read only";
         }
         $self->register_client($client);
@@ -224,10 +271,10 @@ sub stream {
         Stream::Queue::In->new({
             storage => $self,
             client => $client,
-            read_only => $self->{read_only},
-        }) => "$self->{dir}/clients/$client/buffer",
+            read_only => $self->read_only,
+        }) => $self->dir."/clients/$client/buffer",
         {
-            read_only => $self->{read_only},
+            read_only => $self->read_only,
         }
     );
 }
@@ -240,36 +287,16 @@ These methods are not a part of public API and are used only by C<Stream::Queue:
 
 =over
 
-=item B<< meta() >>
+=item B<< meta_persistent() >>
 
 Get metadata object.
 
 It's implemented as simple persistent, so it also works as global queue lock.
 
 =cut
-sub meta {
+sub meta_persistent {
     my $self = shift;
-    return Yandex::Persistent->new("$self->{dir}/queue.meta", { auto_commit => 0, format => 'json', read_only => $self->{read_only} });
-}
-
-=item B<< format() >>
-
-Get queue's internal format.
-
-=cut
-sub format {
-    my $self = shift;
-    return $self->{format};
-}
-
-=item B<< dir() >>
-
-Get queue's dir.
-
-=cut
-sub dir {
-    my $self = shift;
-    return $self->{dir};
+    return Yandex::Persistent->new($self->dir."/queue.meta", { auto_commit => 0, format => 'json', read_only => $self->read_only });
 }
 
 =item B<< chunks_info() >>
@@ -279,12 +306,12 @@ Proxy method for chunks_info() method from C<Stream::Queue::BigChunkDir>.
 =cut
 sub chunks_info {
     my $self = shift;
-    return $self->{chunk_dir}->chunks_info;
+    return $self->chunk_dir->chunks_info;
 }
 
 sub client_names {
     my $self = shift;
-    my @client_names = map { File::Spec->abs2rel( $_, "$self->{dir}/clients" ) } grep { -d $_ } glob "$self->{dir}/clients/*";
+    my @client_names = map { File::Spec->abs2rel( $_, $self->dir."/clients" ) } grep { -d $_ } glob $self->dir."/clients/*";
     return @client_names;
 }
 
@@ -306,19 +333,23 @@ Do garbage collecting if it's necessary.
 sub try_gc {
     my $self = shift;
 
-    if ($self->{read_only} or $self->{gc_timestamp_cached} and time < $self->{gc_timestamp_cached} + $self->{gc_period}) {
+    return if $self->read_only;
+
+    if ( $self->_gc_timestamp_cached and time < $self->_gc_timestamp_cached + $self->gc_period ) {
         return;
     }
 
-    my $meta = $self->meta;
+    my $meta = $self->meta_persistent;
     unless (defined $meta->{gc_timestamp}) {
-        $self->{gc_timestamp_cached} = $meta->{gc_timestamp} = time;
+        $meta->{gc_timestamp} = time;
+        $self->_gc_timestamp_cached($meta->{gc_timestamp});
         $meta->commit;
         return;
     }
-    $self->{gc_timestamp_cached} = $meta->{gc_timestamp};
-    if (time > $meta->{gc_timestamp} + $self->{gc_period}) {
-        $self->{gc_timestamp_cached} = $meta->{gc_timestamp} = time;
+    $self->_gc_timestamp_cached( $meta->{gc_timestamp} );
+
+    if (time > $meta->{gc_timestamp} + $self->gc_period) {
+        $self->_gc_timestamp_cached( $meta->{gc_timestamp} = time );
         $meta->commit;
         $self->gc($meta);
     }
@@ -332,15 +363,15 @@ Check if queue is in old format and needs to be converted.
 sub try_convert {
     my $self = shift;
 
-    my $meta = $self->meta;
+    my $meta = $self->meta_persistent;
     return if $meta->{version} and $meta->{version} == 2;
 
     $self->_check_ro();
 
-    my $cd_meta = $self->{chunk_dir}->meta;
+    my $cd_meta = $self->chunk_dir->meta;
     if ($cd_meta->{id}) {
         if (not defined $meta->{version}) {
-            croak "version field not found in $self->{chunk_dir} metadata";
+            croak "version field not found in ".$self->chunk_dir." metadata";
         }
         if ($meta->{version} == 1) {
             $self->convert($meta);
@@ -368,7 +399,7 @@ sub convert {
 
     my @client_names = $self->client_names;
     for my $client (@client_names) {
-        for my $dir ("$self->{dir}/clients/$client/buffer", "$self->{dir}/clients/$client/pos") {
+        for my $dir ($self->dir."/clients/$client/buffer", $self->dir."/clients/$client/pos") {
             xmkdir($dir) unless -d $dir;
         }
 
@@ -381,13 +412,13 @@ sub convert {
                 xrename($file => $renamed_file);
             }
         };
-        $rename_all->('buffer', glob "$self->{dir}/clients/$client/*.chunk");
-        $rename_all->('buffer', glob "$self->{dir}/clients/$client/*.status");
-        $rename_all->('buffer', "$self->{dir}/clients/$client/meta") if -e "$self->{dir}/clients/$client/meta";
-        $rename_all->('pos', glob "$self->{dir}/clients/$client/*.pos");
+        $rename_all->('buffer', glob $self->dir."/clients/$client/*.chunk");
+        $rename_all->('buffer', glob $self->dir."/clients/$client/*.status");
+        $rename_all->('buffer', $self->dir."/clients/$client/meta") if -e $self->dir."/clients/$client/meta";
+        $rename_all->('pos', glob $self->dir."/clients/$client/*.pos");
 
         # cleanup
-        for my $file (glob "$self->{dir}/clients/$client/*") {
+        for my $file (glob $self->dir."/clients/$client/*") {
             next if $file =~ m{/buffer$};
             next if $file =~ m{/pos$};
             next if -d $file; # shouldn't happen anyway
@@ -411,11 +442,11 @@ This method is called automatically from time to time, so usually you shouldn't 
 sub gc {
     my ($self, $meta) = @_;
     $self->_check_ro();
-    $meta ||= $self->meta; # queue is locked when gc is active
-    my $cd_lock = $self->{chunk_dir}->lock; # chunk dir is locked too
+    $meta ||= $self->meta_persistent; # queue is locked when gc is active
+    my $cd_lock = $self->chunk_dir->lock; # chunk dir is locked too
     DEBUG "Starting gc";
 
-    my @chunks_info = $self->{chunk_dir}->chunks_info;
+    my @chunks_info = $self->chunk_dir->chunks_info;
     my @clients = $self->clients;
 
     CHUNK:
