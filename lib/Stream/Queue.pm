@@ -478,5 +478,5 @@ Vyacheslav Matjukhin <mmcleric@yandex-team.ru>
 
 =cut
 
-1;
+__PACKAGE__->meta->make_immutable;
 
