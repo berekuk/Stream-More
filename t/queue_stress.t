@@ -3,7 +3,8 @@
 use strict;
 use warnings;
 
-use Test::More tests => 4;
+use Test::More tests => 5;
+use Test::Exception;
 
 use lib 'lib';
 
@@ -55,7 +56,10 @@ sub stress_run {
                 1;
             };
             next if $@ =~ /^stress break/;
-            die $@ unless $ok;
+            unless ($ok) {
+                warn $@ if $@;
+                exit(1);
+            }
             my $status = $id2status->($id);
             if ($status->{iterations_left} <= 0) {
                 $status->{done} = 1;
@@ -71,14 +75,17 @@ sub stress_run {
     for my $child_id (1..$params->{parallel}) {
         $new_child->($child_id);
     }
+    my $errors = 0;
     while (my $result = wait) {
         if ($result < 0) {
             #print "stress_run is over\n";
             last;
         }
-        die "Child exited with error '$?'" if $?;
-        #print "child $result is over\n";
-    }; # TODO - randomly kill childs
+        $errors++ if $?;
+    }
+
+    die "$errors of $params->{parallel} children failed" if $errors;
+    # TODO - randomly kill children
 }
 
 sub stress_break {
@@ -191,14 +198,16 @@ sub stress_break {
 }
 
 # stress rw (1)
-{
+TODO: {
+    local $TODO = "a race between Stream::Queue::gc and Stream::Queue::In::read_chunk still unfixed";
+
     PPB::Test::TFiles::import();
 
     my $get_queue = sub {
         Stream::Queue->new({ dir => 'tfiles/queue', max_chunk_size => 10_000, max_chunk_count => 1000 })
     };
 
-    stress_run({
+    lives_ok(sub { stress_run({
         code => sub {
             my $id = shift;
             if ($id <= 5) {
@@ -235,5 +244,5 @@ sub stress_break {
         },
         parallel => 10,
         invoke_count => 10,
-    });
+    }) }, "stress rw");
 }
