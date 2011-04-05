@@ -288,8 +288,8 @@ Cleanup lost files.
 =cut
 sub gc {
     my ($self, $meta) = @_;
-    $meta ||= $self->meta;
     $self->_check_ro();
+    $meta ||= $self->meta;
 
     opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";
     while (my $file = readdir $dh) {

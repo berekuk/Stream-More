@@ -136,7 +136,9 @@ Move chunk counter to the next chunk.
 =cut
 sub next_out {
     my $self = shift;
-    $self->meta->{id}++;
+    my $meta = $self->meta();
+    $meta->{id}++;
+    $meta->commit();
 }
 
 =item B<< chunks_info() >>
