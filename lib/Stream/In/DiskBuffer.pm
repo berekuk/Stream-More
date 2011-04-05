@@ -202,7 +202,7 @@ sub read_chunk {
                     $self->{chunk} = $self->{in}; # ah yeah! streams... yummy!
                     $self->{chunk_in} = 1;
                 } else {
-                    return;
+                    last;
                 }
             }
         }
@@ -214,7 +214,7 @@ sub read_chunk {
                 delete $self->{chunk};
                 next;
             } else {
-                return $result;
+                last;
             }
         }
         $self->{uncommited}++;

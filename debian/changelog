@@ -5,6 +5,7 @@ libstream-more-perl (0.6.15) UNRELEASED; urgency=low
   * json format in in catalog
   * Stream::MemoryStorage::In: destructor localizes $@
   * Stream::Propatate uses /accept handle instead of deprecated /write
+  * distzilla
 
  -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Fri, 25 Mar 2011 20:53:04 +0300
 
