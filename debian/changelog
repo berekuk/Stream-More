@@ -1,5 +1,6 @@
-libstream-more-perl (0.6.15) UNRELEASED; urgency=low
+libstream-more-perl (0.6.15) unstable; urgency=low
 
+  [ Vyacheslav Matjukhin (No comments) ]
   * Stream::Queue, Stream::In::DiskBuffer: performance improvements
   * Stream::Concat::In: support for arbitrary number of input streams
   * json format in in catalog
@@ -7,7 +8,10 @@ libstream-more-perl (0.6.15) UNRELEASED; urgency=low
   * Stream::Propatate uses /accept handle instead of deprecated /write
   * distzilla
 
- -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Fri, 25 Mar 2011 20:53:04 +0300
+  [ Andrei Mishchenko ]
+  * Stream::Queue fixes (not yet complete) 
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Tue, 05 Apr 2011 20:40:33 +0400
 
 libstream-more-perl (0.6.14) unstable; urgency=low
 

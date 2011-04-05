@@ -99,6 +99,12 @@ sub _info2in {
     return $in;
 }
 
+=item B<< chunk_lag($chunk_info) >>
+
+The lag of a single chunk
+
+=cut
+
 sub chunk_lag {
     my ($self, $info) = @_;
     my $in = $self->_info2in($info, { cache => 0 });
