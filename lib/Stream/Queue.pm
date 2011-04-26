@@ -446,15 +446,19 @@ sub gc {
     $meta ||= $self->meta_persistent; # queue is locked when gc is active
 
     my $cd_lock = $self->chunk_dir->lock; # chunk dir is locked too
-    #my $chunk_dir_meta = $self->{chunk_dir}->meta; # ...twice
 
     DEBUG "Starting gc";
 
     my @chunks_info = $self->chunk_dir->chunks_info;
     my @clients = $self->clients;
 
-    delete $self->{out};
-    $self->{chunk_dir}->next_out;
+    # make sure that we switch to new output chunk on every gc;
+    # otherwise, some client can get stuck with .pos file belonging to the old chunk with the same id.
+    if ($self->has_out) {
+        $self->out->commit;
+        $self->clear_out;
+    }
+    $self->chunk_dir->next_out;
 
     CHUNK:
     for my $info (@chunks_info) {
