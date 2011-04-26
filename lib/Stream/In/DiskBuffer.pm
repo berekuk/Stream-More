@@ -289,6 +289,7 @@ Cleanup lost files.
 sub gc {
     my ($self, $meta) = @_;
     $self->_check_ro();
+    $meta ||= $self->meta;
 
     opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";
     while (my $file = readdir $dh) {

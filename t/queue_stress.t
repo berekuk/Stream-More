@@ -3,7 +3,8 @@
 use strict;
 use warnings;
 
-use Test::More tests => 4;
+use Test::More tests => 5;
+use Test::Exception;
 
 use lib 'lib';
 
@@ -51,10 +52,14 @@ sub stress_run {
 
         while (1) {
             my $ok = eval {
-                $params->{code}->();
+                $params->{code}->($id);
                 1;
             };
-            next unless $ok;
+            next if $@ =~ /^stress break/;
+            unless ($ok) {
+                warn $@ if $@;
+                exit(1);
+            }
             my $status = $id2status->($id);
             if ($status->{iterations_left} <= 0) {
                 $status->{done} = 1;
@@ -70,18 +75,22 @@ sub stress_run {
     for my $child_id (1..$params->{parallel}) {
         $new_child->($child_id);
     }
+    my $errors = 0;
     while (my $result = wait) {
         if ($result < 0) {
             #print "stress_run is over\n";
             last;
         }
-        #print "child $result is over\n";
-    }; # TODO - randomly kill childs
+        $errors++ if $?;
+    }
+
+    die "$errors of $params->{parallel} children failed" if $errors;
+    # TODO - randomly kill children
 }
 
 sub stress_break {
     my $probability = shift || 0.001;
-    die if rand() < $probability;
+    die "stress break" if rand() < $probability; # TODO - type exception
 }
 
 # stress writing (3)
@@ -188,3 +197,52 @@ sub stress_break {
     is_deeply([ sort keys %ids ], [ sort map { "id$_" } 1..$total ], 'all ids read from queue');
 }
 
+# stress rw (1)
+TODO: {
+    local $TODO = "a race between Stream::Queue::gc and Stream::Queue::In::read_chunk still unfixed";
+
+    PPB::Test::TFiles::import();
+
+    my $get_queue = sub {
+        Stream::Queue->new({ dir => 'tfiles/queue', max_chunk_size => 10_000, max_chunk_count => 1000 })
+    };
+
+    lives_ok(sub { stress_run({
+        code => sub {
+            my $id = shift;
+            if ($id <= 5) {
+                # reading
+                sleep 0.001;
+                my $queue = $get_queue->();
+                stress_break();
+                my $in = $queue->stream('client');
+                for (1..100) {
+                    my $item = $in->read() or last;
+                }
+                $in->commit;
+            }
+            elsif ($id <= 9) {
+                # writing
+                my $out = $get_queue->();
+                stress_break();
+                for my $portion (1..10) {
+                    for my $id (1..10) {
+                        $out->write({ id => $id, time => time, data => join '', map { rand } 1..100 });
+                        stress_break();
+                    }
+                    $out->commit;
+                    stress_break();
+                }
+            }
+            else {
+                # gc
+                diag("gc started");
+                $get_queue->()->gc;
+                diag("gc done");
+                sleep 0.1;
+            }
+        },
+        parallel => 10,
+        invoke_count => 10,
+    }) }, "stress rw");
+}

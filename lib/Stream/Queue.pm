@@ -442,19 +442,26 @@ This method is called automatically from time to time, so usually you shouldn't 
 sub gc {
     my ($self, $meta) = @_;
     $self->_check_ro();
+
     $meta ||= $self->meta_persistent; # queue is locked when gc is active
+
     my $cd_lock = $self->chunk_dir->lock; # chunk dir is locked too
+    #my $chunk_dir_meta = $self->{chunk_dir}->meta; # ...twice
+
     DEBUG "Starting gc";
 
     my @chunks_info = $self->chunk_dir->chunks_info;
     my @clients = $self->clients;
+
+    delete $self->{out};
+    $self->{chunk_dir}->next_out;
 
     CHUNK:
     for my $info (@chunks_info) {
         DEBUG "processing chunk $info->{id}";
         my $lock = lockf($info->{lock_file}, { blocking => 0 }) or next;
         for my $client (@clients) {
-            my $lag = $client->in->lag();
+            my $lag = $client->in->chunk_lag($info);
             next CHUNK if not defined $lag; #FIXME: O_o
             next CHUNK if $lag > 0;
         }

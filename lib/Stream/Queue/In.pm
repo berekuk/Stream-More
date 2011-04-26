@@ -91,7 +91,7 @@ sub _info2in {
     # otherwise, create it now
     my $file_in = eval { Stream::File->new($info->{file}) }; # it probably means that gc already removed it
     return unless $file_in;
-    
+
     my $new = $self->{read_only} ? "new_ro" : "new";
     my $in = Stream::Formatter::LinedStorable->wrap($file_in)->stream(Stream::File::Cursor->$new("$self->{dir}/$info->{id}.pos"));
     $self->{uncommited}{in}{ $info->{id} } = $in if $opts->{cache};
@@ -99,15 +99,26 @@ sub _info2in {
     return $in;
 }
 
+=item B<< chunk_lag($chunk_info) >>
+
+The lag of a single chunk
+
+=cut
+
+sub chunk_lag {
+    my ($self, $info) = @_;
+    my $in = $self->_info2in($info, { cache => 0 });
+    return unless $in; # chunk already removed?
+    return $in->lag;
+}
+
 sub lag {
     my $self = shift;
     my $lag = 0;
     for my $info ($self->{storage}->chunks_info) {
-        
-        my $in = $self->_info2in($info, { cache => 0 });
-        next unless $in;
-
-        $lag += $in->lag;
+        my $chunk_lag = $self->chunk_lag($info);
+        next unless defined $chunk_lag;
+        $lag += $chunk_lag;
     }
     return $lag;
 }
