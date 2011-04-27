@@ -35,7 +35,7 @@ C<Stream::Queue> and C<Stream::Queue::In> implement local file-based FIFO queue 
 
 use Moose;
 use MooseX::NonMoose;
-extends 'Stream::Storage', 'Stream::Storage::Role::ClientList';
+extends 'Stream::Storage', 'Stream::Storage::Role::ClientList', 'Stream::Role::Owned';
 
 use namespace::autoclean;
 
@@ -96,12 +96,6 @@ has 'gc_period' => (
     default => 300,
 );
 
-has 'read_only' => (
-    is => 'ro',
-    isa => 'Bool',
-    default => 0,
-); #TODO: 0, 1, and undef by default = auto-upgrade
-
 has 'max_chunk_size' => (
     is => 'ro',
     isa => 'Int',
@@ -136,11 +130,44 @@ has 'chunk_dir' => (
     init_arg => undef,
 );
 
+has 'read_only' => (
+    is => 'ro',
+    isa => 'Bool',
+    lazy_build => 1,
+);
+
 has 'out' => (
     is => 'ro',
     isa => class_type('Stream::Out'),
     lazy_build => 1,
 );
+
+has 'owner' => (
+    is => 'ro',
+    isa => 'Str',
+    lazy_build => 1,
+);
+
+sub _build_read_only {
+    my $self = shift;
+    if ($self->owner eq scalar getpwuid($>)) {
+        return 0;
+    }
+    else {
+        return 1;
+    }
+}
+
+sub _build_owner {
+    my $self = shift;
+    my $file = $self->dir."/queue.meta";
+    if (-e $file) {
+        return scalar getpwuid( (stat($file))[4] );
+    }
+    else {
+        return scalar getpwuid($>);
+    }
+}
 
 sub _build_out {
     my $self = shift;
