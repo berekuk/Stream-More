@@ -179,9 +179,11 @@ sub BUILD {
     $self->dir( File::Spec->rel2abs($self->dir) );
     # TODO - check that dir is writable
     unless (-d $self->dir) {
+        $self->_check_ro;
         xmkdir($self->dir);
     }
     unless (-d $self->dir."/clients") {
+        $self->_check_ro;
         xmkdir($self->dir."/clients");
     }
     $self->chunk_dir;
