@@ -18,6 +18,8 @@ use Yandex::Persistent;
 use Yandex::X;
 use Stream::In::DiskBuffer::Chunk;
 
+use Scalar::Util qw(blessed);
+
 =head1 NAME
 
 Stream::In::DiskBuffer - parallelize any input stream using on-disk buffer
@@ -42,7 +44,9 @@ This class solves this problem by caching small backlog in multiple on-disk file
 
 Constructor.
 
-C<$in> can be any L<Stream::In> object.
+C<$in> can be L<Stream::In> object or coderef which returns L<Stream::In> object.
+
+Second variant is useful if underlying input stream caches stream position; in this case, it's necessary to recreate input stream every time when diskbuffer caches new portion of data, so that every item is read from underlying stream only once. For example, you definitely should write C<< Stream::In::DiskBuffer->new(sub { Stream::Log->new(...) }, $dir) >> and not C<< Stream::In::DiskBuffer->new(Stream::Log->new(...), $dir) >>.
 
 C<$dir> is a path to local dir. It will be created automatically if at least its parent dir exists (you should have appropriate rights to do this, of course).
 
@@ -63,14 +67,21 @@ Period in seconds to run garbage collecting.
 =cut
 sub new {
     my $class = shift;
-    my ($in, $dir, @options) = validate_pos(@_, { isa => 'Stream::In' }, 1, { type => HASHREF, optional => 1 });
+    my ($in, $dir, @options) = validate_pos(@_, { type => CODEREF | OBJECT }, { type => SCALAR }, { type => HASHREF, optional => 1 });
+
     my $self = validate(@options, {
         format => { default => 'storable' },
         gc_period => { default => 300 },
         read_only => { default => 0 },
     });
-    $self->{in} = $in;
     $self->{dir} = $dir;
+
+    if (blessed($in)) {
+        $self->{in} = sub { $in };
+    }
+    else {
+        $self->{in} = $in;
+    }
 
     $self->{prev_chunks} = {};
     $self->{uncommited} = 0;
@@ -128,12 +139,15 @@ sub _new_chunk {
     my $self = shift;
     $self->_check_ro();
     my $chunk_size = $self->{uncommited} + 1;
-    my $data = $self->{in}->read_chunk($chunk_size);
+
+    my $in = $self->in;
+    my $data = $in->read_chunk($chunk_size);
     return unless $data;
     return unless @$data;
     my $new_id = $self->_next_id;
     Stream::In::DiskBuffer::Chunk->new($self->{dir}, $new_id, $data, { format => $self->{format} });
-    $self->{in}->commit;
+    $in->commit;
+
     return $new_id;
 }
 
@@ -199,7 +213,7 @@ sub read_chunk {
         unless ($self->{chunk}) {
             unless ($self->_next_chunk()) {
                 if ($self->{read_only} and not $self->{chunk_in}) {
-                    $self->{chunk} = $self->{in}; # ah yeah! streams... yummy!
+                    $self->{chunk} = $self->in; # ah yeah! streams... yummy!
                     $self->{chunk_in} = 1;
                 } else {
                     last;
@@ -323,14 +337,14 @@ sub gc {
     closedir $dh or die "Can't close '$self->{dir}': $!";
 }
 
-=item B<<in() >>
+=item B<< in() >>
 
 Get underlying input stream.
 
 =cut
 sub in {
     my $self = shift;
-    return $self->{in};
+    return $self->{in}->();
 }
 
 =item B<< buffer_lag() >>
@@ -364,14 +378,15 @@ Get total lag of this buffer and underlying stream.
 =cut
 sub lag {
     my $self = shift;
-    die "underlying input stream doesn't implement Lag role" unless $self->{in}->does('Stream::In::Role::Lag');
-    return $self->{in}->lag + $self->buffer_lag;
+    my $in = $self->in;
+    die "underlying input stream doesn't implement Lag role" unless $in->does('Stream::In::Role::Lag');
+    return $in->lag + $self->buffer_lag;
 }
 
 sub does {
     my ($self, $role) = @_;
     if ($role eq 'Stream::In::Role::Lag') {
-        return $self->{in}->does($role);
+        return $self->in->does($role);
     }
     return $self->SUPER::does($role);
 }

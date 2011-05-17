@@ -21,7 +21,7 @@ Stream::Queue::BigChunkDir - dir for keeping queue chunks
 
 This class is for keeping main queue chunks.
 
-Client-specific chunks are not maintained by this class (yet).
+Client-specific chunks are not maintained by this class.
 
 =over
 
@@ -108,10 +108,6 @@ sub out {
         $meta = $self->meta if $trial == 1; # upgrading to locked meta after first trial
         if ($id == $meta->{id}) {
             # we are the first one noticed that chunk is full
-            my @chunk_files = glob "$self->{dir}/*.chunk";
-            if (@chunk_files >= $self->{max_chunk_count}) {
-                die "Chunk count exceeded";
-            }
             $id = ++$meta->{id};
             $meta->commit;
             INFO "New chunk $id";
@@ -125,6 +121,12 @@ sub out {
             next;
         }
     }
+
+    my @chunk_files = glob "$self->{dir}/*.chunk";
+    if (@chunk_files >= $self->{max_chunk_count}) {
+        die "Chunk count exceeded";
+    }
+
     my $out = Stream::Queue::BigChunkFile->new($self->{dir}, $id);
     return Stream::Formatter::LinedStorable->wrap($out);
 }

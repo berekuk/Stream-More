@@ -83,5 +83,45 @@ sub gc_bug :Test(4) {
 }
 
 
-__PACKAGE__->new->runtests;
+sub in_coderef :Tests {
+    my $file = Stream::File->new('tfiles/file');
+    $file->write("$_\n") for 'a'..'z';
+    $file->commit;
 
+    my $gen_in = sub {
+        return Stream::File->new('tfiles/file')->stream(Stream::File::Cursor->new('tfiles/cursor'));
+    };
+
+    my $db1 = Stream::In::DiskBuffer->new($gen_in, 'tfiles/buffer');
+    my $db2 = Stream::In::DiskBuffer->new($gen_in, 'tfiles/buffer');
+
+    my $db1_done;
+    my $db2_done;
+    my @db1_data;
+    my @db2_data;
+    while (not $db1_done or not $db2_done) {
+        unless ($db1_done) {
+            my $item = $db1->read;
+            if ($item) {
+                push @db1_data, $item;
+            }
+            else {
+                $db1_done++;
+            }
+        }
+        unless ($db2_done) {
+            my $item = $db2->read;
+            if ($item) {
+                push @db2_data, $item;
+            }
+            else {
+                $db2_done++;
+            }
+        }
+    }
+    is(@db1_data + @db2_data, 26, '26 items total');
+    ok(@db1_data > 10, 'at least 10 items from first db');
+    ok(@db2_data > 10, 'at least 10 items from second db');
+}
+
+__PACKAGE__->new->runtests;

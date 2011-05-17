@@ -51,7 +51,7 @@ sub new {
     my $class = shift;
     my $self = validate(@_, {
         storage => { isa => 'Stream::Queue' },
-        client => { regex => qr/^[\w-]+$/ },
+        client => { regex => qr/^[\w\.-]+$/ },
         read_only => { default => 0 },
     });
     unless ($self->{storage}->has_client($self->{client})) {

@@ -59,24 +59,20 @@ use Moose::Util::TypeConstraints;
 
 our $CURRENT_VERSION = 2;
 
-=item B<< new({ dir => $dir }) >>
+=item B<< new( dir => $dir ) >>
 
 Constructor. C<$dir> must be writable and empty on first invocation.
 
-Options:
-
-=over
-
-=item I<autoregister>
-
-If true, automatically register client at first C<stream()> call.
-
-Default is true.
-
-=back
+See source code for other possible attributes.
 
 =cut
-has 'dir' => ( is => 'rw', isa => 'Str', required => 1 ); # FIXME - this shouldn't be 'rw', but we need to call rel2abs in BUILD
+
+# FIXME - this shouldn't be 'rw', but we need to call rel2abs in BUILD
+has 'dir' => (
+    is => 'rw',
+    isa => 'Str',
+    required => 1,
+);
 
 has 'format' => (
     is => 'ro',
@@ -88,6 +84,7 @@ has 'autoregister' => (
     is => 'ro',
     isa => 'Bool',
     default => 1,
+    documentation => 'If true, automatically register client at first C<stream()> call',
 );
 
 has 'gc_period' => (
@@ -239,7 +236,7 @@ Once registered, client must read queue regularly; otherwise queue will become o
 =cut
 sub register_client {
     my $self = shift;
-    my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
+    my ($client) = validate_pos(@_, { regex => qr/^[\w\.-]+$/ });
     $self->_check_ro();
 
     my $status = $self->meta_persistent; # global lock
@@ -259,7 +256,7 @@ Unregister client named C<$client_name>.
 =cut
 sub unregister_client {
     my $self = shift;
-    my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
+    my ($client) = validate_pos(@_, { regex => qr/^[\w\.-]+$/ });
     $self->_check_ro();
     my $status = $self->meta_persistent; # global lock
     unless ($self->has_client($client)) {
@@ -276,7 +273,7 @@ Check whether queue has client C<$client_name> registered.
 =cut
 sub has_client {
     my $self = shift;
-    my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
+    my ($client) = validate_pos(@_, { regex => qr/^[\w\.-]+$/ });
     unless (-d $self->dir."/clients/$client") {
         return;
     }
@@ -285,7 +282,7 @@ sub has_client {
 
 sub stream {
     my $self = shift;
-    my ($client) = validate_pos(@_, { regex => qr/^[\w-]+$/ });
+    my ($client) = validate_pos(@_, { regex => qr/^[\w\.-]+$/ });
 
     unless ($self->has_client($client)) {
         unless ($self->autoregister) {

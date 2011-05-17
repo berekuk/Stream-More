@@ -1,3 +1,12 @@
+libstream-more-perl (0.6.17) unstable; urgency=low
+
+  * DiskBuffer: allow coderef as $in
+  * Stream::Queue:
+   - always comply to max_chunk_count
+   - allow '.' in client names
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 17 May 2011 18:50:18 +0400
+
 libstream-more-perl (0.6.16) unstable; urgency=low
 
   * Stream::Queue moosified
