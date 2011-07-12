@@ -52,5 +52,5 @@ sub register_unregister :Test(1) {
         'storage_names after several register/unregister calls'
     );
 }
-1;
 
+1;

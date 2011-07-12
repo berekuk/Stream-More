@@ -106,11 +106,4 @@ sub two_clients :Test(3) {
     is($in2->read, 'abc');
 }
 
-=head1 AUTHOR
-
-Vyacheslav Matjukhin <mmcleric@yandex-team.ru>
-
-=cut
-
 1;
-

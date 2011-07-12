@@ -241,4 +241,35 @@ sub gc :Test(2) {
     cmp_ok($calc_count->(), '<', 30);
 }
 
-__PACKAGE__->new->runtests;
+# test suite
+{
+    my @tests;
+
+    use Stream::Test::Out;
+    push @tests, Stream::Test::Out->new(sub {
+        PPB::Test::TFiles->import;
+        my $queue = Stream::Queue->new({
+            dir => 'tfiles',
+        });
+    });
+
+    use Stream::Test::StorageWithClients;
+    push @tests, Stream::Test::StorageWithClients->new(sub {
+        PPB::Test::TFiles->import;
+        my $queue = Stream::Queue->new({
+            dir => 'tfiles',
+        });
+    });
+
+    use Stream::Test::StorageRW;
+    push @tests, Stream::Test::StorageRW->new(sub {
+        PPB::Test::TFiles->import;
+        my $queue = Stream::Queue->new({
+            dir => 'tfiles',
+        });
+    });
+
+    push @tests, __PACKAGE__->new;
+
+    Test::Class->runtests(@tests);
+}
