@@ -34,13 +34,18 @@ C<Stream::Queue> and C<Stream::Queue::In> implement local file-based FIFO queue 
 =cut
 
 use Moose;
-use MooseX::NonMoose;
-extends 'Stream::Storage', 'Stream::Storage::Role::ClientList';
+use parent 'Stream::Storage::Role::ClientList';
 
 with
+    'Stream::Moose::Storage',
     'Stream::Moose::Out::ReadOnly',
     'Stream::Moose::Role::AutoOwned' => { file_method => 'meta_file' },
 ;
+
+sub isa {
+    return 1 if $_[1] eq __PACKAGE__;
+    $_[0]->next::method if $_[0]->next::can;
+} # ugly hack
 
 use namespace::autoclean;
 
@@ -249,7 +254,7 @@ sub has_client {
     return 1;
 }
 
-sub stream {
+sub in {
     my $self = shift;
     my ($client) = validate_pos(@_, { regex => qr/^[\w\.-]+$/ });
 

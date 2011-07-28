@@ -3,8 +3,6 @@ package Stream::RoundRobin;
 use namespace::autoclean;
 
 use Moose;
-with 'Stream::Moose::Storage', 'Stream::Moose::Role::AutoOwned';
-
 use autodie;
 
 # FIXME - replace these with moose roles
@@ -12,7 +10,10 @@ use parent qw(
     Stream::Storage::Role::ClientList
 );
 
-sub isa { $_[0]->next::method if $_[0]->next::can } # ugly hack
+sub isa {
+    return 1 if $_[1] eq __PACKAGE__;
+    $_[0]->next::method if $_[0]->next::can;
+} # ugly hack
 
 has 'dir' => (
     is => 'ro',
@@ -43,11 +44,6 @@ sub BUILD {
     }
 }
 
-sub owner_file {
-    my $self = shift;
-    $self->dir;
-}
-
 sub write {
     warn "write (TBI)";
 }
@@ -59,5 +55,11 @@ sub commit {
 sub in {
     warn "in (TBI)";
 }
+
+with
+    'Stream::Moose::Storage',
+    'Stream::Moose::Out::ReadOnly',
+    'Stream::Moose::Role::AutoOwned' => { file_method => 'dir' },
+;
 
 __PACKAGE__->meta->make_immutable;
