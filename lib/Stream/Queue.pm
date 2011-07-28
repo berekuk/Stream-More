@@ -35,7 +35,12 @@ C<Stream::Queue> and C<Stream::Queue::In> implement local file-based FIFO queue 
 
 use Moose;
 use MooseX::NonMoose;
-extends 'Stream::Storage', 'Stream::Storage::Role::ClientList', 'Stream::Role::Owned';
+extends 'Stream::Storage', 'Stream::Storage::Role::ClientList';
+
+with
+    'Stream::Moose::Out::ReadOnly',
+    'Stream::Moose::Role::AutoOwned' => { file_method => 'meta_file' },
+;
 
 use namespace::autoclean;
 
@@ -127,43 +132,15 @@ has 'chunk_dir' => (
     init_arg => undef,
 );
 
-has 'read_only' => (
-    is => 'ro',
-    isa => 'Bool',
-    lazy_build => 1,
-);
-
 has 'out' => (
     is => 'ro',
     isa => class_type('Stream::Out'),
     lazy_build => 1,
 );
 
-has 'owner' => (
-    is => 'ro',
-    isa => 'Str',
-    lazy_build => 1,
-);
-
-sub _build_read_only {
+sub meta_file {
     my $self = shift;
-    if ($self->owner eq scalar getpwuid($>)) {
-        return 0;
-    }
-    else {
-        return 1;
-    }
-}
-
-sub _build_owner {
-    my $self = shift;
-    my $file = $self->dir."/queue.meta";
-    if (-e $file) {
-        return scalar getpwuid( (stat($file))[4] );
-    }
-    else {
-        return scalar getpwuid($>);
-    }
+    return $self->dir."/queue.meta";
 }
 
 sub _build_out {
@@ -176,22 +153,16 @@ sub BUILD {
     $self->dir( File::Spec->rel2abs($self->dir) );
     # TODO - check that dir is writable
     unless (-d $self->dir) {
-        $self->_check_ro;
+        $self->check_read_only;
         xmkdir($self->dir);
     }
     unless (-d $self->dir."/clients") {
-        $self->_check_ro;
+        $self->check_read_only;
         xmkdir($self->dir."/clients");
     }
     $self->chunk_dir;
     $self->try_convert;
     $self->try_gc;
-}
-
-sub _check_ro {
-    my $self = shift;
-    local $Carp::CarpLevel = 1;
-    croak "Storage is read only" if $self->read_only;
 }
 
 =item B<< write($item) >>
@@ -203,7 +174,6 @@ Item can be any string or serializable structure, but it can't be C<undef>.
 =cut
 sub write($$) {
     my ($self, $item) = @_;
-    $self->_check_ro();
     unless (defined $item) {
         croak "Can't write undef";
     }
@@ -217,7 +187,6 @@ Commit written items.
 =cut
 sub commit {
     my $self = shift;
-    $self->_check_ro();
     unless ($self->has_out) {
         DEBUG "Nothing to commit";
         return;
@@ -237,7 +206,7 @@ Once registered, client must read queue regularly; otherwise queue will become o
 sub register_client {
     my $self = shift;
     my ($client) = validate_pos(@_, { regex => qr/^[\w\.-]+$/ });
-    $self->_check_ro();
+    $self->check_read_only();
 
     my $status = $self->meta_persistent; # global lock
     if ($self->has_client($client)) {
@@ -257,7 +226,7 @@ Unregister client named C<$client_name>.
 sub unregister_client {
     my $self = shift;
     my ($client) = validate_pos(@_, { regex => qr/^[\w\.-]+$/ });
-    $self->_check_ro();
+    $self->check_read_only();
     my $status = $self->meta_persistent; # global lock
     unless ($self->has_client($client)) {
         WARN "No such client '$client', can't unregister";
@@ -322,7 +291,7 @@ It's implemented as simple persistent, so it also works as global queue lock.
 =cut
 sub meta_persistent {
     my $self = shift;
-    return Yandex::Persistent->new($self->dir."/queue.meta", { auto_commit => 0, format => 'json', read_only => $self->read_only });
+    return Yandex::Persistent->new($self->meta_file, { auto_commit => 0, format => 'json', read_only => $self->read_only });
 }
 
 =item B<< chunks_info() >>
@@ -392,7 +361,7 @@ sub try_convert {
     my $meta = $self->meta_persistent;
     return if $meta->{version} and $meta->{version} == 2;
 
-    $self->_check_ro();
+    $self->check_read_only();
 
     my $cd_meta = $self->chunk_dir->meta;
     if ($cd_meta->{id}) {
@@ -421,7 +390,7 @@ Convert queue from old format. All client positions will be lost, sorry.
 sub convert {
     my ($self, $meta) = @_;
     INFO "Converting from version format 1";
-    $self->_check_ro();
+    $self->check_read_only();
 
     my @client_names = $self->client_names;
     for my $client (@client_names) {
@@ -467,7 +436,7 @@ This method is called automatically from time to time, so usually you shouldn't 
 =cut
 sub gc {
     my ($self, $meta) = @_;
-    $self->_check_ro();
+    $self->check_read_only();
 
     $meta ||= $self->meta_persistent; # queue is locked when gc is active
 
@@ -509,11 +478,6 @@ sub gc {
 
 =back
 
-=head1 AUTHOR
-
-Vyacheslav Matjukhin <mmcleric@yandex-team.ru>
-
 =cut
 
 __PACKAGE__->meta->make_immutable;
-
