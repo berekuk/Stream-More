@@ -38,6 +38,7 @@ use parent 'Stream::Storage::Role::ClientList';
 
 with
     'Stream::Moose::Storage',
+    'Stream::Moose::Out::Easy',
     'Stream::Moose::Out::ReadOnly',
     'Stream::Moose::Role::AutoOwned' => { file_method => 'meta_file' },
 ;
