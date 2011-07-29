@@ -1,12 +1,10 @@
 package Stream::Moose::In::ReadOnly;
 
 use Moose::Role;
-
-requires 'read_only';
+with 'Stream::Moose::Role::ReadOnly';
 
 before [qw( commit )] => sub {
-    my ($orig, $self) = @_;
-    croak "Input stream $self is read only" if $self->read_only;
+    shift->check_read_only;
 };
 
 1;

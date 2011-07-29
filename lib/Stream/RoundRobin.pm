@@ -4,18 +4,21 @@ use namespace::autoclean;
 
 use Moose;
 use MooseX::Params::Validate;
+use Moose::Util::TypeConstraints;
 
-use autodie;
-use Yandex::Lockf;
-use Yandex::Persistent;
-use Fcntl qw(SEEK_SET SEEK_CUR SEEK_END);
+use autodie qw(:all);
+use IPC::System::Simple;
+use Fcntl qw( SEEK_SET SEEK_CUR SEEK_END );
 use IO::Handle;
 use List::Util qw(sum);
 
-# FIXME - replace these with moose roles
-use parent qw(
-    Stream::Storage::Role::ClientList
-);
+use Yandex::Lockf;
+use Yandex::Logger;
+use Yandex::Persistent;
+
+use Stream::RoundRobin::Types qw(:all);
+use Stream::RoundRobin::Util qw( check_cross );;
+use Stream::RoundRobin::In;
 
 sub isa {
     return 1 if $_[1] eq __PACKAGE__;
@@ -82,33 +85,6 @@ sub set_position {
     $state->commit;
 }
 
-sub _check_cross {
-    my $self = shift;
-    my ($left, $right, $positions) = validated_list(
-        \@_,
-        left => { isa => 'Int' },
-        right => { isa => 'Int' },
-        positions => { isa => 'HashRef[Int]' }, # name -> int value
-    );
-    if ($right > $self->data_size) {
-        confess "right side is too big ($right)";
-    }
-    if ($left > $self->data_size) {
-        confess "right side is too big ($left)";
-    }
-    if ($left < $right) {
-        # easy
-        for my $name (keys %$positions) {
-            my $position = $positions->{$name};
-            confess "crossed $name position ($position)" if $position > $left and $position <= $right;
-        }
-    }
-    else {
-        $self->_check_cross(left => $left, right => $self->data_size, positions => $positions);
-        $self->_check_cross(left => 0, right => $right, positions => $positions);
-    }
-}
-
 sub commit {
     my $self = shift;
 
@@ -143,9 +119,10 @@ sub commit {
         my $left = int(sysseek($fh, 0, SEEK_CUR));
         my $right = $left + $buffer_length;
         $right -= $self->data_size if $right > $self->data_size;
-        $self->_check_cross(
+        check_cross(
             left => $left,
             right => $right,
+            size => $self->data_size,
             positions => {
                 "storage's own" => $old_position,
                 # TODO - client positions
@@ -171,12 +148,46 @@ sub commit {
     $self->buffer([]);
 }
 
+sub client_names {
+    my $self = shift;
+    my @client_names = map { File::Spec->abs2rel( $_, $self->dir."/clients" ) } grep { -d $_ } glob $self->dir."/clients/*";
+    return @client_names;
+}
+
+sub register_client {
+    my $self = shift;
+    my ($name) = pos_validated_list(\@_, { isa => ClientName });
+    $self->check_read_only();
+
+    if ($self->has_client($name)) {
+        return; # already registered
+    }
+
+    INFO "Registering $name at ".$self->dir;
+    mkdir($self->dir."/clients/$name");
+}
+
+sub unregister_client {
+    my $self = shift;
+    my ($client) = pos_validated_list(\@_, { isa => ClientName });
+    $self->check_read_only();
+    unless ($self->has_client($client)) {
+        WARN "No such client '$client', can't unregister";
+        return;
+    }
+    INFO "Unregistering $client at ".$self->dir;
+    system('rm', '-rf', '--', $self->dir."/clients/$client");
+}
+
 sub in {
-    warn "in (TBI)";
+    my $self = shift;
+    my ($client) = pos_validated_list(\@_, { isa => ClientName });
+    return Stream::RoundRobin::In->new(storage => $self, name => $client);
 }
 
 with
     'Stream::Moose::Storage',
+    'Stream::Moose::Storage::ClientList', # register_client/unregister_client/client_names methods
     'Stream::Moose::Out::Chunked', # provides 'write' implementation
     'Stream::Moose::Out::ReadOnly', # provides check_read_only and calls it before write/write_chunk/commit
     'Stream::Moose::Role::AutoOwned' => { file_method => 'dir' }, # provides owner/owner_uid
