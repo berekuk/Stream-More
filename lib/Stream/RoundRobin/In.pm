@@ -1,5 +1,6 @@
 package Stream::RoundRobin::In;
 
+use namespace::autoclean;
 use Moose;
 
 use autodie qw( open seek ); # can't import everything - read messes with stream's read method
@@ -40,23 +41,23 @@ has 'dir' => (
 
 has 'lock' => (
     is => 'ro',
-    lazy => 1,
-    default => sub {
-        my $self = shift;
-        return lockf($self->dir.'/lock', { blocking => 1 });
-    },
-    clearer => 'clear_lock',
+    lazy_build => 1,
 );
 
+sub _build_lock {
+    my $self = shift;
+    return lockf($self->dir.'/lock', { blocking => 1 });
+}
+
 has 'position' => (
-    is => 'ro',
+    is => 'rw',
     isa => 'Int',
     lazy_build => 1,
 );
 
 sub _build_position {
     my $self = shift;
-    my $state = Yandex::Persistent->new($self->dir.'/state', { read_only => $self->read_only, auto_commit => 0 });
+    my $state = Yandex::Persistent->new($self->dir.'/state', { read_only => 1 });
 
     my $position = $state->{position};
     $position = $self->storage->position unless defined $position;
@@ -68,8 +69,10 @@ sub commit_position {
     my $self = shift;
     $self->check_read_only;
 
+    my $position = $self->position; # before creating $state to avoid deadlock
+
     my $state = Yandex::Persistent->new($self->dir.'/state', { auto_commit => 0 });
-    $state->{position} = $self->{position};
+    $state->{position} = $position;
     $state->commit;
 
     $self->clear_position;
@@ -94,18 +97,34 @@ sub read_chunk {
     }
 
     my $data_size = $self->storage->data_size;
+    my $incomplete;
     my @buffer;
 
-    for my $i (1 .. $length) {
+    while (@buffer < $length) {
         if ($cur == $write_position) {
+            confess "Unexpected incomplete line $incomplete" if defined $incomplete;
             # ok, nothing more to read
             last;
         }
         my $line = <$fh>;
-        unless ($line =~ /\n$/) {
-            confess "Incomplete line";
+        $cur += length $line;
+        if ($line =~ /\n$/) {
+            if (defined $incomplete) {
+                $line = $incomplete.$line;
+                undef $incomplete;
+            }
+            push @buffer, $line;
         }
-        $cur = int(seek($fh, 0, SEEK_CUR)); # TODO - calculating it from line length would be faster, but I'm paranoid
+        else {
+            if ($cur == $data_size) {
+                confess "Two incomplete lines in a row" if defined $incomplete;
+                $incomplete = $line;
+            }
+            else {
+                confess "Incomplete line"; # this is pretty much impossible if file has the correct size
+            }
+        }
+
         if ($read_until_wrap) {
             if ($cur == $data_size) {
                 # wrap!

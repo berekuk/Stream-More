@@ -34,14 +34,6 @@ C<Stream::Queue> and C<Stream::Queue::In> implement local file-based FIFO queue 
 =cut
 
 use Moose;
-use parent 'Stream::Storage::Role::ClientList';
-
-with
-    'Stream::Moose::Storage',
-    'Stream::Moose::Out::Easy',
-    'Stream::Moose::Out::ReadOnly',
-    'Stream::Moose::Role::AutoOwned' => { file_method => 'meta_file' },
-;
 
 sub isa {
     return 1 if $_[1] eq __PACKAGE__;
@@ -89,13 +81,6 @@ has 'format' => (
     is => 'ro',
     isa => subtype( as 'Str', where { $_ eq 'storable' } ),
     default => 'storable',
-);
-
-has 'autoregister' => (
-    is => 'ro',
-    isa => 'Bool',
-    default => 1,
-    documentation => 'If true, automatically register client at first C<stream()> call',
 );
 
 has 'gc_period' => (
@@ -259,15 +244,6 @@ sub in {
     my $self = shift;
     my ($client) = validate_pos(@_, { regex => qr/^[\w\.-]+$/ });
 
-    unless ($self->has_client($client)) {
-        unless ($self->autoregister) {
-            croak "Client $client not found and autoregister is disabled";
-        } 
-        if ($self->read_only) {
-            croak "Client $client not found and storage is read only";
-        }
-        $self->register_client($client);
-    }
     return Stream::In::DiskBuffer->new(
         Stream::Queue::In->new({
             storage => $self,
@@ -485,5 +461,14 @@ sub gc {
 =back
 
 =cut
+
+with
+    'Stream::Moose::Storage',
+    'Stream::Moose::Out::Easy',
+    'Stream::Moose::Out::ReadOnly',
+    'Stream::Moose::Storage::ClientList',
+    'Stream::Moose::Storage::AutoregisterClients',
+    'Stream::Moose::Role::AutoOwned' => { file_method => 'meta_file' },
+;
 
 __PACKAGE__->meta->make_immutable;

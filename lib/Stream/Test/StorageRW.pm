@@ -75,13 +75,15 @@ sub client_is_input_stream :Test(1) {
 sub simple_read_write :Test(3) {
     my $self = shift;
     my $storage = $self->{storage};
-    $storage->write(123);
-    $storage->write('abc');
+
+    $storage->register_client('blah') if $storage->can('register_client'); # because some storages start their clients from the tail of the storage
+    $storage->write("123\n");
+    $storage->write("abc\n");
     $storage->commit;
 
     my $in = $self->stream('blah');
-    is($in->read, 123);
-    is($in->read, 'abc');
+    is($in->read, "123\n");
+    is($in->read, "abc\n");
     is($in->read, undef);
     $in->commit;
 }
@@ -89,8 +91,12 @@ sub simple_read_write :Test(3) {
 sub two_clients :Test(3) {
     my $self = shift;
     my $storage = $self->{storage};
-    $storage->write(123);
-    $storage->write('abc');
+    if ($storage->can('register_client')) {
+        $storage->register_client($_) for qw( blah blah2 );
+    }
+
+    $storage->write("123\n");
+    $storage->write("abc\n");
     $storage->commit;
 
     {
@@ -101,9 +107,9 @@ sub two_clients :Test(3) {
 
     my $in = $self->stream('blah');
     my $in2 = $self->stream('blah2');
-    is($in->read, 'abc');
-    is($in2->read, 123);
-    is($in2->read, 'abc');
+    is($in->read, "abc\n");
+    is($in2->read, "123\n");
+    is($in2->read, "abc\n");
 }
 
 1;

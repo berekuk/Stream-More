@@ -28,7 +28,12 @@ sub check_cross {
         # easy
         for my $name (keys %$positions) {
             my $position = $positions->{$name};
-            confess "crossed $name position ($position)" if $position > $left and $position <= $right;
+            if (
+                $position > $left and $position <= $right
+                or $position == 0 and $right == $size
+            ) {
+                confess "crossed $name position ($position)"
+            }
         }
     }
     else {

@@ -43,6 +43,7 @@ sub BUILD {
     unless (-d $dir) {
         mkdir $dir;
     }
+    my $lock = $self->lock;
     unless (-d "$dir/clients") {
         mkdir "$dir/clients";
     }
@@ -51,6 +52,9 @@ sub BUILD {
         sysseek $fh, $self->data_size - 1, 0;
         print {$fh} "\0";
         close $fh;
+    }
+    if (-s "$dir/data" != $self->data_size) {
+        die "Invalid data_size ".$self->data_size.", file has size ".(-s "$dir/data");
     }
 }
 
@@ -88,8 +92,14 @@ sub set_position {
 sub commit {
     my $self = shift;
 
-    my $lock = $self->lock;
     my $buffer = $self->buffer;
+    return unless @$buffer;
+
+    # if there will be an exception (because of cross_check, for example), storage will still stay usable
+    # (but please don't rely on what I say here, it's mostly for tests)
+    $self->buffer([]);
+
+    my $lock = $self->lock;
     open my $fh, '+<', $self->dir.'/data';
 
     my $old_position = $self->position;
@@ -100,7 +110,7 @@ sub commit {
         my $left = length $line;
         my $offset = 0;
         while ($left) {
-            my $bytes = $fh->syswrite($line, $left, $offset); # FIXME - restart on overflow!
+            my $bytes = $fh->syswrite($line, $left, $offset);
             if (not defined $bytes) {
                 die "syswrite failed: $!";
             } elsif ($bytes == 0) {
@@ -115,7 +125,9 @@ sub commit {
     {
         # let's check that new data will fit in the storage
         my $buffer_length = sum(map { length $_ } @$buffer);
-        confess "buffer is too large ($buffer_length)" if $buffer_length >= $self->data_size;
+        if ($buffer_length >= $self->data_size) {
+            confess "buffer is too large ($buffer_length bytes, ".scalar @$buffer." lines)"
+        }
         my $left = int(sysseek($fh, 0, SEEK_CUR));
         my $right = $left + $buffer_length;
         $right -= $self->data_size if $right > $self->data_size;
@@ -125,7 +137,7 @@ sub commit {
             size => $self->data_size,
             positions => {
                 "storage's own" => $old_position,
-                # TODO - client positions
+                map { $_ => $self->in($_)->position } $self->client_names,
             },
         );
     }
@@ -145,7 +157,6 @@ sub commit {
     close $fh;
     # TODO - fsync?
     $self->set_position($new_position);
-    $self->buffer([]);
 }
 
 sub client_names {
@@ -165,6 +176,7 @@ sub register_client {
 
     INFO "Registering $name at ".$self->dir;
     mkdir($self->dir."/clients/$name");
+    $self->in($name)->commit; # create client state
 }
 
 sub unregister_client {
@@ -188,6 +200,7 @@ sub in {
 with
     'Stream::Moose::Storage',
     'Stream::Moose::Storage::ClientList', # register_client/unregister_client/client_names methods
+    'Stream::Moose::Storage::AutoregisterClients',
     'Stream::Moose::Out::Chunked', # provides 'write' implementation
     'Stream::Moose::Out::ReadOnly', # provides check_read_only and calls it before write/write_chunk/commit
     'Stream::Moose::Role::AutoOwned' => { file_method => 'dir' }, # provides owner/owner_uid
