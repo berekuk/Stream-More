@@ -151,8 +151,19 @@ sub commit {
     $self->clear_lock;
 }
 
+sub lag {
+    my $self = shift;
+    my $position = $self->position;
+    my $storage_position = $self->storage->position;
+    my $lag = $storage_position - $position;
+    $lag += $self->storage->data_size if $lag < 0;
+    $self->clear_position;
+    return $lag;
+}
+
 with 'Stream::Moose::In::Chunked',
     'Stream::Moose::In::ReadOnly', # provides check_read_only and calls it before write/write_chunk/commit
+    'Stream::Moose::In::Lag', # lag method
     'Stream::Moose::Role::AutoOwned' => { file_method => 'dir' }, # provides owner/owner_uid
 ;
 

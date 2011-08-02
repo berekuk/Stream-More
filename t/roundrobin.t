@@ -47,6 +47,16 @@ sub isa_storage :Test(1) {
     ok($self->make_storage->isa('Stream::Storage'), 'roundrobin is a storage');
 }
 
+sub lag :Test(1) {
+    my $self = shift;
+    my $storage = $self->make_storage;
+    $storage->register_client('abc');
+    $storage->write("line\n");
+    $storage->write("line2\n");
+    $storage->commit;
+    is($storage->in('abc')->lag, 11, 'lag method');
+}
+
 sub autocreate_dirs :Test(2) {
     my $self = shift;
     my $storage = $self->make_storage;
