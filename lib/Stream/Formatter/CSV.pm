@@ -73,11 +73,6 @@ Should think through backward-compatibility issues and implement correct quoting
 
 There is no way to specify custom separator yet.
 
-=head1 AUTHOR
-
-Vyacheslav Matjukhin <mmcleric@yandex-team.ru>
-
 =cut
 
 1;
-

@@ -60,11 +60,6 @@ sub stream {
 
 C<Stream::Concat::In> - concatenate any number of input streams
 
-=head1 AUTHOR
-
-Vyacheslav Matjukhin <mmcleric@yandex-team.ru>
-
 =cut
 
 1;
-

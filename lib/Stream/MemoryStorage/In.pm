@@ -33,11 +33,4 @@ sub DESTROY {
     $self->{storage}->_unlock_client($self->{client});
 }
 
-=head1 AUTHOR
-
-Vyacheslav Matjukhin <mmcleric@yandex-team.ru>
-
-=cut
-
 1;
-
