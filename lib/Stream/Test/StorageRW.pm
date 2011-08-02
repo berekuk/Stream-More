@@ -36,8 +36,9 @@ Coderef which returns newly constructed storage when called.
 
 Coderef which generates new argument appropriate for C<< $storage->stream($cursor) >> call. By default, it's trivial C<< sub { shift } >>, which works fine for storages which support named clients.
 
-=cut
+=back
 
+=cut
 sub new {
     my $class = shift;
     my ($storage_gen, $cursor_gen) = validate_pos(@_, { type => CODEREF }, { type => CODEREF, default => sub { shift } } );
@@ -111,5 +112,9 @@ sub two_clients :Test(3) {
     is($in2->read, "123\n");
     is($in2->read, "abc\n");
 }
+
+=back
+
+=cut
 
 1;
