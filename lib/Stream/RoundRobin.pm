@@ -20,6 +20,8 @@ use Stream::RoundRobin::Types qw(:all);
 use Stream::RoundRobin::Util qw( check_cross );;
 use Stream::RoundRobin::In;
 
+use Stream::In::DiskBuffer;
+
 sub isa {
     return 1 if $_[1] eq __PACKAGE__;
     $_[0]->next::method if $_[0]->next::can;
@@ -53,7 +55,7 @@ sub BUILD {
         print {$fh} "\0";
         close $fh;
     }
-    if (-s "$dir/data" != $self->data_size) {
+    if (int(-s "$dir/data") != $self->data_size) {
         die "Invalid data_size ".$self->data_size.", file has size ".(-s "$dir/data");
     }
 }
@@ -137,7 +139,7 @@ sub commit {
             size => $self->data_size,
             positions => {
                 "storage's own" => $old_position,
-                map { $_ => $self->in($_)->position } $self->client_names,
+                map { $_ => $self->in($_)->in->position } $self->client_names,
             },
         );
     }
@@ -176,7 +178,7 @@ sub register_client {
 
     INFO "Registering $name at ".$self->dir;
     mkdir($self->dir."/clients/$name");
-    $self->in($name)->commit; # create client state
+    $self->in($name)->in->commit; # create client state
 }
 
 sub unregister_client {
@@ -194,7 +196,13 @@ sub unregister_client {
 sub in {
     my $self = shift;
     my ($client) = pos_validated_list(\@_, { isa => ClientName });
-    return Stream::RoundRobin::In->new(storage => $self, name => $client);
+    return Stream::In::DiskBuffer->new(
+        Stream::RoundRobin::In->new(storage => $self, name => $client) => $self->dir."/clients/$client/buffer",
+        {
+            read_only => $self->read_only,
+            format => 'plain',
+        }
+    );
 }
 
 with
