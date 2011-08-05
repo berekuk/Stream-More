@@ -30,3 +30,5 @@ role {
 
     with 'Stream::Moose::Role::Owned';
 };
+
+1;

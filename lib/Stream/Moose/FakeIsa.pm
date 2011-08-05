@@ -26,3 +26,5 @@ role {
         return $self->$orig(@_);
     };
 };
+
+1;

@@ -35,7 +35,7 @@ has 'dir' => (
     default => sub {
         my $self = shift;
         $self->storage->dir.'/clients/'.$self->name;
-    }
+    },
 );
 
 

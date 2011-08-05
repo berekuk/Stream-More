@@ -1,5 +1,8 @@
 package Stream::RoundRobin::Types;
 
+use strict;
+use warnings;
+
 use MooseX::Types
     -declare => [qw( ClientName )];
 
