@@ -1,3 +1,9 @@
+libstream-more-perl (0.7.1) unstable; urgency=low
+
+  * Stream::Moose::Role::Description
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 06 Sep 2011 18:53:09 +0400
+
 libstream-more-perl (0.7.0) unstable; urgency=low
 
   * lots of Stream::Moose::* roles
