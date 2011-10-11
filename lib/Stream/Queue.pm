@@ -45,6 +45,7 @@ use namespace::autoclean;
 use Yandex::Logger;
 use Yandex::Lockf 3.0;
 
+use Format::Human::Bytes;
 use Params::Validate;
 use File::Path qw(rmtree);
 use File::Spec;
@@ -129,7 +130,7 @@ has 'out' => (
     lazy_build => 1,
 );
 
-sub meta_file {
+sub _meta_file {
     my $self = shift;
     return $self->dir."/queue.meta";
 }
@@ -273,7 +274,7 @@ It's implemented as simple persistent, so it also works as global queue lock.
 =cut
 sub meta_persistent {
     my $self = shift;
-    return Yandex::Persistent->new($self->meta_file, { auto_commit => 0, format => 'json', read_only => $self->read_only });
+    return Yandex::Persistent->new($self->_meta_file, { auto_commit => 0, format => 'json', read_only => $self->read_only });
 }
 
 =item B<< chunks_info() >>
@@ -348,7 +349,7 @@ sub try_convert {
     my $cd_meta = $self->chunk_dir->meta;
     if ($cd_meta->{id}) {
         if (not defined $meta->{version}) {
-            croak "version field not found in ".$self->chunk_dir." metadata";
+            croak "version field not found in ".$self->dir." metadata";
         }
         if ($meta->{version} == 1) {
             $self->convert($meta);
@@ -458,6 +459,22 @@ sub gc {
     }
 }
 
+sub description {
+    my $self = shift;
+    my $max_size = $self->max_chunk_size * $self->max_chunk_count;
+    my $real_size = 0;
+    for my $info ($self->chunk_dir->chunks_info) {
+        $real_size += -s $info->{file};
+    }
+    my $occupancy = $real_size / $max_size;
+    $occupancy = int($occupancy / 1000) * 10;
+    return
+        "dir: ".$self->dir."\n"
+        ."max size: ".Format::Human::Bytes->new->base2($max_size)."\n"
+        ."occupancy: ".$occupancy."%";
+    ;
+}
+
 =back
 
 =cut
@@ -468,7 +485,8 @@ with
     'Stream::Moose::Out::ReadOnly',
     'Stream::Moose::Storage::ClientList',
     'Stream::Moose::Storage::AutoregisterClients',
-    'Stream::Moose::Role::AutoOwned' => { file_method => 'meta_file' },
+    'Stream::Moose::Role::AutoOwned' => { file_method => '_meta_file' },
+    'Stream::Moose::Role::Description',
 ;
 
 __PACKAGE__->meta->make_immutable;

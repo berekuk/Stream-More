@@ -65,7 +65,7 @@ sub _build_position {
     return $position;
 }
 
-sub commit_position {
+sub _commit_position {
     my $self = shift;
     $self->check_read_only;
 
@@ -147,7 +147,7 @@ sub read_chunk {
 sub commit {
     my $self = shift;
 
-    $self->commit_position;
+    $self->_commit_position;
     $self->clear_lock;
 }
 

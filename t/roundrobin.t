@@ -70,14 +70,14 @@ sub write_and_check_data_file :Test(9) {
     $storage->write("abc\n");
     $storage->commit;
 
-    is(slurp('tfiles/a/data'), "abc\n\0\0\0\0\0\0", 'state after first write');
+    is(slurp('tfiles/a/data'), "abc\n\n\n\n\n\n\n", 'state after first write');
     is($storage->position, 4, 'position after first write');
 
     $storage->write("e\n");
     $storage->write("f\n");
     $storage->commit;
 
-    is(slurp('tfiles/a/data'), "abc\ne\nf\n\0\0", 'state after second write');
+    is(slurp('tfiles/a/data'), "abc\ne\nf\n\n\n", 'state after second write');
     is($storage->position, 8, 'position after second write');
 
     $storage->write("1234\n");

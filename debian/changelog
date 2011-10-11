@@ -1,3 +1,18 @@
+libstream-more-perl (0.7.2) unstable; urgency=low
+
+  * Stream::RoundRobin:
+   - description role
+   - fill with \n instead of \0 initially
+  * Stream::Queue:
+   - description role
+   - order big chunks when reading
+   - Stream::Queue::In moosified
+  * rewrite Stream::Concat and Stream::Concat::In with Moose
+  * Stream::Concat::In propagates lag method
+  * more pod everywhere, test pod for moose-based classes
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Mon, 10 Oct 2011 18:29:54 +0400
+
 libstream-more-perl (0.7.1) unstable; urgency=low
 
   * Stream::Moose::Role::Description

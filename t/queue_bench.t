@@ -171,7 +171,7 @@ sub bench {
     diag("reading ".($baseline * $portion * 2 / 1000)."k items: $double_time");
     diag("reading ".($baseline * $portion * 4 / 1000)."k items: $quadro_time");
 
-    cmp_ok($quadro_time / $time, '<', 5, 'read scales good enough');
+    cmp_ok($quadro_time / $time, '<', 8, 'read scales well enough');
 }
 
 {
@@ -217,5 +217,5 @@ sub bench {
     diag("reading ".($baseline * $portion * 2 / 1000)."k items in large portions: $double_time");
     diag("reading ".($baseline * $portion * 4 / 1000)."k items in large portions: $quadro_time");
 
-    cmp_ok($quadro_time / $time, '<', 5, 'read in large portions scales good enough');
+    cmp_ok($quadro_time / $time, '<', 8, 'read in large portions scales well enough');
 }

@@ -1,11 +1,6 @@
 package Stream::Queue::In;
 
-use strict;
-use warnings;
-
-=head1 NAME
-
-Stream::Queue::In - input stream for Stream::Queue
+# ABSTRACT: input stream for Stream::Queue
 
 =head1 SYNOPSIS
 
@@ -20,16 +15,11 @@ This class is an input stream for L<Stream::Queue> class. It is not parallel its
 
 It is wrapped in L<Stream::In::DiskBuffer> when constructed via C<stream> method of L<Stream::Queue> storage, though.
 
-=head1 METHODS
-
-=over
-
 =cut
 
-use parent qw(
-    Stream::In::Role::Lag
-    Stream::In
-);
+use namespace::autoclean;
+use Moose;
+
 use Params::Validate;
 
 use Carp;
@@ -40,34 +30,46 @@ use Yandex::X;
 use Stream::Formatter::LinedStorable;
 use Stream::File::Cursor;
 
-=item C<< new({ storage => $queue, client => $client }) >>
+sub isa {
+    return 1 if $_[1] eq __PACKAGE__;
+    $_[0]->next::method if $_[0]->next::can;
+} # ugly hack
 
-Constructor.
 
-Usually you should construct object of this class using C<stream()> method from C<Stream::Queue>.
+has 'storage' => (
+    is => 'ro',
+    isa => 'Stream::Queue',
+    required => 1,
+);
 
-=cut
-sub new {
-    my $class = shift;
-    my $self = validate(@_, {
-        storage => { isa => 'Stream::Queue' },
-        client => { regex => qr/^[\w\.-]+$/ },
-        read_only => { default => 0 },
-    });
-    unless ($self->{storage}->has_client($self->{client})) {
-        croak "$self->{client} is not registered at ".$self->{storage}->dir;
-    }
-    $self->{dir} = $self->{storage}->dir."/clients/$self->{client}/pos";
-    bless $self => $class;
-    return $self;
+has 'client' => (
+    is => 'ro',
+    isa => 'Str', # qr/^[\w\.-]+$/
+    required => 1,
+);
 
+has 'dir' => (
+    is => 'ro',
+    isa => 'Str',
+    lazy => 1,
+    default => sub {
+        my $self = shift;
+        return $self->storage->dir."/clients/".$self->client."/pos";
+    },
+);
+
+has 'uncommited' => (
+    is => 'ro',
+    isa => 'HashRef',
+    lazy_build => 1,
+);
+sub _build_uncommited {
+    return {};
 }
 
-sub _check_ro {
-    my $self = shift;
-    local $Carp::CarpLevel = 1;
-    croak "Stream is read only" if $self->{read_only};
-}
+=head1 METHODS
+
+=over
 
 =item B<< lock() >>
 
@@ -76,8 +78,8 @@ Get lock.
 =cut
 sub lock {
     my $self = shift;
-    $self->_check_ro();
-    return lockf("$self->{dir}/lock");
+    $self->check_read_only;
+    return lockf($self->dir."/lock");
 }
 
 sub _info2in {
@@ -85,16 +87,18 @@ sub _info2in {
     $opts ||= {};
     $opts->{cache} = 1 unless defined $opts->{cache};
 
-    my $cached = $self->{uncommited}{in}{ $info->{id} }; # it can already be in "uncommited" cache
+    my $cached = $self->uncommited->{in}{ $info->{id} }; # it can already be in "uncommited" cache
     return $cached if $cached;
 
     # otherwise, create it now
     my $file_in = eval { Stream::File->new($info->{file}) }; # it probably means that gc already removed it
     return unless $file_in;
 
-    my $new = $self->{read_only} ? "new_ro" : "new";
-    my $in = Stream::Formatter::LinedStorable->wrap($file_in)->stream(Stream::File::Cursor->$new("$self->{dir}/$info->{id}.pos"));
-    $self->{uncommited}{in}{ $info->{id} } = $in if $opts->{cache};
+    my $new = $self->read_only ? "new_ro" : "new";
+    my $in = Stream::Formatter::LinedStorable->wrap($file_in)->stream(Stream::File::Cursor->$new($self->dir."/$info->{id}.pos"));
+    if ($opts->{cache}) {
+        $self->uncommited->{in}{ $info->{id} } = $in;
+    }
 
     return $in;
 }
@@ -115,7 +119,7 @@ sub chunk_lag {
 sub lag {
     my $self = shift;
     my $lag = 0;
-    for my $info ($self->{storage}->chunks_info) {
+    for my $info ($self->storage->chunks_info) {
         my $chunk_lag = $self->chunk_lag($info);
         next unless defined $chunk_lag;
         $lag += $chunk_lag;
@@ -127,11 +131,10 @@ sub read_chunk {
     my $self = shift;
     my $chunk_size = shift;
 
-    $self->{uncommited} ||= {};
     my $lock;
-    $lock = $self->lock unless $self->{uncommited}->{lock} or $self->{read_only};
+    $lock = $self->lock unless $self->uncommited->{lock} or $self->read_only;
 
-    my @chunks_info = $self->{storage}->chunks_info;
+    my @chunks_info = $self->storage->chunks_info;
 
     my $data;
     for my $info (@chunks_info) {
@@ -146,7 +149,7 @@ sub read_chunk {
     }
     if ($data and @$data and $lock) {
         # returning non-empty chunk, keeping this client locked until "commit" will be called
-        $self->{uncommited}->{lock} = $lock;
+        $self->uncommited->{lock} = $lock;
     }
     return $data;
 }
@@ -167,12 +170,12 @@ sub read {
 
 sub commit {
     my $self = shift;
-    $self->_check_ro();
-    return unless $self->{uncommited};
-    for (values %{ $self->{uncommited}{in} }) {
+
+    return unless $self->has_uncommited;
+    for (values %{ $self->uncommited->{in} }) {
         $_->commit;
     }
-    delete $self->{uncommited};
+    $self->clear_uncommited;
     return ();
 }
 
@@ -183,11 +186,11 @@ Get position in bytes for given chunk id.
 =cut
 sub pos {
     my ($self, $id) = @_;
-    my $cursor_file = "$self->{dir}/$id.pos";
+    my $cursor_file = $self->dir."/$id.pos";
     unless (-e $cursor_file) {
         return 0;
     }
-    my $new = $self->{read_only} ? "new_ro" : "new";
+    my $new = $self->read_only ? "new_ro" : "new";
     my $cursor = Stream::File::Cursor->$new($cursor_file);
     return $cursor->position;
 }
@@ -199,33 +202,40 @@ Cleanup lost files.
 =cut
 sub gc {
     my $self = shift;
-    $self->_check_ro();
+    $self->check_read_only;
+
     my $lock = $self->lock;
-    opendir my $dh, $self->{dir} or die "Can't open '$self->{dir}': $!";
+    opendir my $dh, $self->dir or die "Can't open '".$self->dir."': $!";
     while (my $file = readdir $dh) {
         next if $file eq '.';
         next if $file eq '..';
         next if $file =~ /(^meta|^lock$)/;
         my $unlink = sub {
-            xunlink("$self->{dir}/$file");
+            xunlink($self->dir."/$file");
         };
         my $id;
         if (($id) = $file =~ /^(\d+)\.(?: pos | pos\.lock )$/x) {
-            unless (-e $self->{storage}->dir."/$id.chunk") {
+            unless (-e $self->storage->dir."/$id.chunk") {
                 $unlink->();
-                DEBUG "[$self->{client}] Lost file $file for $id chunk removed";
+                DEBUG "[".$self->client."] Lost file $file for $id chunk removed";
             }
             next;
         }
 
-        WARN "[$self->{client}] Removing unknown file $file";
+        WARN "[".$self->client."] Removing unknown file $file";
         $unlink->();
     }
-    closedir $dh or die "Can't close '$self->{dir}': $!";
+    closedir $dh or die "Can't close '".$self->dir."': $!";
 }
 
 =back
 
 =cut
+
+with
+    'Stream::Moose::In::Chunked',
+    'Stream::Moose::In::Lag',
+    'Stream::Moose::In::ReadOnly',
+;
 
 1;

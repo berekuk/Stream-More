@@ -1,8 +1,5 @@
 package Stream::Concat;
 
-use strict;
-use warnings;
-
 =head1 NAME
 
 Stream::Concat - composite storage helping to change underlying storage implementation
@@ -20,41 +17,59 @@ Stream::Concat - composite storage helping to change underlying storage implemen
 
 use namespace::autoclean;
 
-use parent qw(Stream::Storage);
+use Moose;
 
 use Params::Validate;
 use Stream::Concat::In;
 
-sub new {
-    my $class = shift;
+sub isa {
+    return 1 if $_[1] eq __PACKAGE__;
+    $_[0]->next::method if $_[0]->next::can;
+} # ugly hack
+
+has 'new_storage' => (
+    is => 'ro',
+    handles => 'Stream::Moose::Out',
+    required => 1,
+);
+
+has 'old_storage' => (
+    is => 'ro',
+    required => 1,
+);
+
+=head1 METHODS
+
+=over
+
+=item B< BUILDARGS($old, $new) >
+
+Constructor of this class accepts two arguments: old storage and new storage.
+
+=cut
+sub BUILDARGS {
+    my $self = shift;
     my ($old_storage, $new_storage) = validate_pos(@_, { isa => 'Stream::Storage' }, { isa => 'Stream::Storage' });
-    return bless {
-        old => $old_storage,
-        new => $new_storage,
-    } => $class;
+
+    return {
+        old_storage => $old_storage,
+        new_storage => $new_storage,
+    }
 }
 
-sub write {
+sub in {
     my $self = shift;
-    $self->{new}->write(@_);
-}
 
-sub write_chunk {
-    my $self = shift;
-    $self->{new}->write_chunk(@_);
-}
-
-sub commit {
-    my $self = shift;
-    $self->{new}->commit;
-}
-
-sub stream {
-    my $self = shift;
-    my $old_in = $self->{old}->stream(@_);
-    my $new_in = $self->{new}->stream(@_);
+    my $old_in = $self->old_storage->stream(@_);
+    my $new_in = $self->new_storage->stream(@_);
     return Stream::Concat::In->new($old_in, $new_in);
 }
+
+=back
+
+=cut
+
+with 'Stream::Moose::Storage';
 
 =head1 SEE ALSO
 
@@ -62,4 +77,4 @@ C<Stream::Concat::In> - concatenate any number of input streams
 
 =cut
 
-1;
+__PACKAGE__->meta->make_immutable;

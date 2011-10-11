@@ -157,6 +157,7 @@ sub chunks_info {
         my $id = $1;
         push @result, { id => $id, file => $file, lock_file => "$self->{dir}/$id.append_lock" };
     }
+    @result = sort { $a->{id} <=> $b->{id} } @result;
     return @result;
 }
 
