@@ -39,17 +39,18 @@ sub generic :Test(3) {
     is($in->read, undef, 'commit worked, nothing to read');
 }
 
-sub legacy :Test(1) {
-    xsystem('cp t/data/legacy_json.log tfiles/legacy_json.log');
-    my $storage = Stream::File->new("./tfiles/legacy_json.log");
+sub legacy_data2 :Test(1) {
+    my $storage = Stream::File->new("t/data/legacy_json.log");
     my $wrapper = Stream::Formatter::JSON->new;
-    my $formatted_storage = $wrapper->wrap($storage);
-    $formatted_storage->write({ "a\n\\b" => "ddd\n\\eee" });
-    $formatted_storage->commit;
-    my $in = $formatted_storage->stream(Stream::File::Cursor->new("./tfiles/legacy.pos"));
-    my $old_data = $in->read;
-    my $new_data = $in->read;
-    is_deeply($old_data, $new_data, 'old data and new data are equal');
+    my $in = $wrapper->wrap($storage)->stream(Stream::File::Cursor->new("./tfiles/legacy.pos"));
+    is_deeply(
+        $in->read_chunk(2),
+        [
+            { foo => 5 },
+            { data2 => { foo => 5 }, bar => 6 },
+        ],
+        'legacy json parsed correctly'
+    );
 }
 
 __PACKAGE__->new->runtests();

@@ -19,28 +19,25 @@ use Stream::Filter qw(filter);
 use Stream::Utils qw(catalog);
 
 sub write_filter {
-    my $json = JSON::XS->new;
+    my $json = JSON::XS->new->allow_nonref;
 
     return filter(sub {
         my $item = shift;
-        return $json->encode({ data2 => $item })."\n";
+        return $json->encode($item)."\n";
     });
 }
 
 sub read_filter {
-    my $json = JSON::XS->new;
-    my $legacy_filter = catalog->filter('line2str');
+    my $json = JSON::XS->new->allow_nonref;
     my $filter = filter(sub {
         my $item = shift;
 
-        # legacy mode, to be removed
-        if ($item =~ /^{"data"/) {
-            $item = $legacy_filter->write($item);
-            return $json->decode($item)->{data};
-        }
-
         my $decoded = $json->decode($item);
-        return $decoded->{data2};
+
+        if (ref $decoded eq 'HASH' and scalar(keys %$decoded) == 1 and exists $decoded->{data2}) {
+            return $decoded->{data2}; # legacy mode
+        }
+        return $decoded;
     });
 }
 
