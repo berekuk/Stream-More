@@ -385,7 +385,7 @@ sub lag {
 
 sub does {
     my ($self, $role) = @_;
-    if ($role eq 'Stream::In::Role::Lag') {
+    if ($role eq 'Stream::In::Role::Lag' or $role eq 'Stream::Moose::In::Lag') {
         return $self->in->does($role);
     }
     return $self->SUPER::does($role);
