@@ -3,3 +3,4 @@
 /debuild
 /Stream-More-*
 /.build
+/debian/stamp
