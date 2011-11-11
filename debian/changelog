@@ -2,7 +2,9 @@ libstream-more-perl (0.7.3) UNRELEASED; urgency=low
 
   * DiskBuffer: support lag role when moose-based input stream supports it
   * get rid of 'data2' in json formatter
-  * RoundRobin: load Format::Human::Bytes - fix 'info' method
+  * RoundRobin:
+   - load Format::Human::Bytes - fix 'info' method
+   - don't keep input stream locked if we read nothing
 
  -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 08 Nov 2011 23:34:35 +0400
 
