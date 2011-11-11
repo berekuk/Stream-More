@@ -1,5 +1,7 @@
 package Stream::RoundRobin::Types;
 
+# ABSTRACT: moose types collection for Stream::RoundRobin
+
 use strict;
 use warnings;
 

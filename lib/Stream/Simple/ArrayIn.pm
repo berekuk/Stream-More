@@ -1,5 +1,7 @@
 package Stream::Simple::ArrayIn;
 
+# ABSTRACT: simple on-memory input stream from arrayref
+
 use strict;
 use warnings;
 

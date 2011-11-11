@@ -1,5 +1,7 @@
 package Stream::Moose::Role::Description;
 
+# ABSTRACT: role for streams which can report their detailed descriptions
+
 use Moose::Role;
 
 =head1 METHODS

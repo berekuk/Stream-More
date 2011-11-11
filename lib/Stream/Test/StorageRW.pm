@@ -1,5 +1,7 @@
 package Stream::Test::StorageRW;
 
+# ABSTRACT: test storage rw capabilities
+
 use strict;
 use warnings;
 
@@ -9,10 +11,6 @@ use parent qw(Test::Class);
 use Test::More;
 use Params::Validate qw(:all);
 use Yandex::X;
-
-=head1 NAME
-
-Stream::Test::StorageRW - test storage rw capabilities
 
 =head1 DESCRIPTION
 

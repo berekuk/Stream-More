@@ -3,9 +3,7 @@ package Stream::DB::Inserter;
 use strict;
 use warnings;
 
-=head1 NAME
-
-Stream::DB::Inserter - simple stream wrapper around PPB::DB::Inserter
+# ABSTRACT: simple stream wrapper around PPB::DB::Inserter
 
 =head1 SYNOPSIS
 

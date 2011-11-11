@@ -1,5 +1,7 @@
 package Stream::RoundRobin::In;
 
+# ABSTRACT: input stream for Stream::RoundRobin storage
+
 use namespace::autoclean;
 use Moose;
 

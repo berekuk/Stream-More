@@ -1,15 +1,13 @@
 package Stream::Filter::Subfilter;
 
+# ABSTRACT: filter part of given data using another filter
+
 use strict;
 use warnings;
 
 use parent qw(Stream::Filter);
 
 use Params::Validate qw(:all);
-
-=head1 NAME
-
-Stream::Filter::Subfilter - filter part of given data using another filter
 
 =head1 SYNOPSIS
 

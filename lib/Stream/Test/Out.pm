@@ -1,5 +1,7 @@
 package Stream::Test::Out;
 
+# ABSTRACT: Test::Class-based collection of tests for output streams
+
 use strict;
 use warnings;
 

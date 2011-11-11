@@ -1,13 +1,9 @@
 package Stream::MemoryStorage;
 
+# ABSTRACT: in-memory storage with support for named clients
+
 use strict;
 use warnings;
-
-=head1 NAME
-
-Stream::MemoryStorage - in-memory storage with support for named clients
-
-=cut
 
 use parent qw(Stream::Storage);
 use Streams 0.9.0 qw();

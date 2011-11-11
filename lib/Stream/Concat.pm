@@ -1,8 +1,6 @@
 package Stream::Concat;
 
-=head1 NAME
-
-Stream::Concat - composite storage helping to change underlying storage implementation
+# ABSTRACT: composite storage helping to change underlying storage implementation
 
 =head1 SYNOPSIS
 

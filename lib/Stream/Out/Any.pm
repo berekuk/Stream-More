@@ -3,9 +3,7 @@ package Stream::Out::Any;
 use strict;
 use warnings;
 
-=head1 NAME
-
-Stream::Out::Any - write data into one of several output streams
+# ABSTRACT: write data into one of several output streams
 
 =head1 SYNOPSIS
 

@@ -1,5 +1,7 @@
 package Stream::Queue::BigChunkFile;
 
+# ABSTRACT: helper class for Stream::Queue
+
 use strict;
 use warnings;
 

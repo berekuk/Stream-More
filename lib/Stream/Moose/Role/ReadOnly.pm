@@ -1,5 +1,10 @@
 package Stream::Moose::Role::ReadOnly;
 
+# ABSTRACT: role for optionally read-only streams
+
+# There is nothing stream-specific in this role, actually.
+# We could refactor it into some overly-abstract Role::ReadOnly::OwnerBased role in the future.
+
 use Moose::Role;
 with 'Stream::Moose::Role::Owned';
 

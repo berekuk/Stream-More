@@ -1,5 +1,11 @@
 package Stream::Moose::Role::Owned;
 
+# ABSTRACT: role for streams which have owners
+
+# There is nothing stream-specific in this role, actually.
+# We could refactor it into some overly-abstract Role::Owned role in the future.
+# (see also Stream::Moose::Role::ReadOnly)
+
 use Moose::Role;
 
 has 'owner' => (

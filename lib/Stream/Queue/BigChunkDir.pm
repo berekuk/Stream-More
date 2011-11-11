@@ -1,5 +1,7 @@
 package Stream::Queue::BigChunkDir;
 
+# ABSTRACT: dir for keeping queue chunks
+
 use strict;
 use warnings;
 
@@ -12,10 +14,6 @@ use Stream::Formatter::LinedStorable;
 use Stream::File;
 
 use Stream::Queue::BigChunkFile;
-
-=head1 NAME
-
-Stream::Queue::BigChunkDir - dir for keeping queue chunks
 
 =head1 DESCRIPTION
 

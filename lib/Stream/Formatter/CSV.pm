@@ -1,11 +1,9 @@
 package Stream::Formatter::CSV;
 
+# ABSTRACT: CSV <=> hashref formatter
+
 use strict;
 use warnings;
-
-=head1 NAME
-
-Stream::Formatter::CSV - CSV <=> hashref formatter
 
 =head1 DESCRIPTION
 

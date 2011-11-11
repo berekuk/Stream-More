@@ -1,5 +1,7 @@
 package Stream::Moose::Role::AutoOwned;
 
+# ABSTRACT: specialization of ::Role::Owned which detects owner by *nix file owner
+
 use MooseX::Role::Parameterized;
 
 parameter 'file_method' => (

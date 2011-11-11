@@ -1,5 +1,7 @@
 package Stream::In::DiskBuffer;
 
+# ABSTRACT: parallelize any input stream using on-disk buffer
+
 use strict;
 use warnings;
 
@@ -19,10 +21,6 @@ use Yandex::X;
 use Stream::In::DiskBuffer::Chunk;
 
 use Scalar::Util qw(blessed);
-
-=head1 NAME
-
-Stream::In::DiskBuffer - parallelize any input stream using on-disk buffer
 
 =head1 SYNOPSIS
 

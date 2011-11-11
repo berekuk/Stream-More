@@ -1,5 +1,7 @@
 package Stream::MemoryStorage::In;
 
+# ABSTRACT: in-memory input stream for Stream::MemoryStorage
+
 use strict;
 use warnings;
 

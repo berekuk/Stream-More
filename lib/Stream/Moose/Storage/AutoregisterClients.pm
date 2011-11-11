@@ -1,5 +1,7 @@
 package Stream::Moose::Storage::AutoregisterClients;
 
+# ABSTRACT: role for storages supporting named clients which want to register them automatically
+
 use namespace::autoclean;
 
 use Moose::Role;

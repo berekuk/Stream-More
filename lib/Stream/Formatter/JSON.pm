@@ -1,13 +1,9 @@
 package Stream::Formatter::JSON;
 
+# ABSTRACT: JSON formatter
+
 use strict;
 use warnings;
-
-=head1 NAME
-
-Stream::Formatter::JSON - JSON formatter
-
-=cut
 
 # forcing XS parser - JSON.pm older than 2.00 is broken
 # TODO - consider JSON::Any instead (but it can load broken JSON.pm, that would be bad)

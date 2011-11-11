@@ -1,5 +1,7 @@
 package Stream::Simple::CodeOut;
 
+# ABSTRACT: output stream generated from callback
+
 use strict;
 use warnings;
 

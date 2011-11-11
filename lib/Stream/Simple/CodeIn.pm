@@ -1,5 +1,7 @@
 package Stream::Simple::CodeIn;
 
+# ABSTRACT: input stream generated from callback
+
 use strict;
 use warnings;
 

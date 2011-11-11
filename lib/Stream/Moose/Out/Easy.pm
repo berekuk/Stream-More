@@ -1,5 +1,7 @@
 package Stream::Moose::Out::Easy;
 
+# ABSTRACT: role to implement output streams with only one write() method
+
 use Moose::Role;
 with 'Stream::Moose::Out';
 

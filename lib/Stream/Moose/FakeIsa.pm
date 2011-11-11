@@ -1,5 +1,7 @@
 package Stream::Moose::FakeIsa;
 
+# ABSTRACT: add fake classes to moose-based class isa method
+
 # there is nothing stream-specific in this package
 # remember that you have to add the following code to the class consuming this role:
 # sub isa { $_[0]->next::method if $_[0]->next::can }

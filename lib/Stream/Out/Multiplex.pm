@@ -3,9 +3,7 @@ package Stream::Out::Multiplex;
 use strict;
 use warnings;
 
-=head1 NAME
-
-Stream::Out::Multiplex - multiplex data into several output streams
+# ABSTRACT: multiplex data into several output streams
 
 =head1 SYNOPSIS
 

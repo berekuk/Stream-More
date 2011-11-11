@@ -1,10 +1,6 @@
 package Stream::Concat::In;
 
-=head1 NAME
-
-Stream::Concat::In - concatenate several input streams
-
-=cut
+# ABSTRACT: concatenate several input streams
 
 use namespace::autoclean;
 use Moose;

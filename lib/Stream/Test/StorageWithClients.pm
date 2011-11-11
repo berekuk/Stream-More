@@ -1,5 +1,7 @@
 package Stream::Test::StorageWithClients;
 
+# ABSTRACT: Test::Class-based collection of tests for storages with clients
+
 use strict;
 use warnings;
 

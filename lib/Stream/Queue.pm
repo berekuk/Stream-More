@@ -1,8 +1,6 @@
 package Stream::Queue;
 
-=head1 NAME
-
-Stream::Queue - output stream supporting parallel writing
+# ABSTRACT: output stream supporting parallel writing
 
 =head1 SYNOPSIS
 

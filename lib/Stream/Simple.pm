@@ -1,13 +1,11 @@
 package Stream::Simple;
 
+# ABSTRACT: simple procedural-style constructors of some streams
+
 use strict;
 use warnings;
 
 use Yandex::Version '{{DEBIAN_VERSION}}';
-
-=head1 NAME
-
-Stream::Simple - simple procedural-style constructors of some streams
 
 =head1 SYNOPSIS
 

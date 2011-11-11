@@ -1,5 +1,7 @@
 package Stream::In::DiskBuffer::Chunk;
 
+# ABSTRACT: represents one disk buffer chunk
+
 use strict;
 use warnings;
 
@@ -8,10 +10,6 @@ use parent qw(
     Stream::In
     Stream::In::Role::Lag
 );
-
-=head1 NAME
-
-Stream::In::DiskBuffer::Chunk - represents one disk buffer chunk
 
 =head1 METHODS
 

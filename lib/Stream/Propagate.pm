@@ -3,9 +3,7 @@ package Stream::Propagate;
 use strict;
 use warnings;
 
-=head1 NAME
-
-Stream::Propagate - output stram for propagating data into stream-accept http service
+# ABSTRACT: output stram for propagating data into stream-accept http service
 
 =head1 SYNOPSIS
 
