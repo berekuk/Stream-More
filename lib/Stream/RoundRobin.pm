@@ -13,6 +13,7 @@ use IPC::System::Simple;
 use Fcntl qw( SEEK_SET SEEK_CUR SEEK_END );
 use IO::Handle;
 use List::Util qw(sum);
+use Format::Human::Bytes;
 
 use Yandex::Lockf;
 use Yandex::Logger;
