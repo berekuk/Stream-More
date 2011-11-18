@@ -1,3 +1,10 @@
+libstream-more-perl (0.7.4) unstable; urgency=low
+
+  * rollback removing 'data2' key in json formatter, add assert instead, so
+    that we can upgrade smoothly in the next release
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Wed, 16 Nov 2011 18:25:05 +0400
+
 libstream-more-perl (0.7.3) unstable; urgency=low
 
   * DiskBuffer: support lag role when moose-based input stream supports it

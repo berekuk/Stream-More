@@ -19,7 +19,7 @@ sub write_filter {
 
     return filter(sub {
         my $item = shift;
-        return $json->encode($item)."\n";
+        return $json->encode({ data2 => $item })."\n";
     });
 }
 
@@ -30,9 +30,16 @@ sub read_filter {
 
         my $decoded = $json->decode($item);
 
+        # We'll stop wrapping data in 'data2' hash in the next release.
+        # For the smoother upgrade, we assert that 'data2' key is actually present in data.
+        #
+        # By now, this code is the main execution path.
+        # In the next release, it'll become legacy execution path.
+        # And in the release after that, it'll be removed completely.
         if (ref $decoded eq 'HASH' and scalar(keys %$decoded) == 1 and exists $decoded->{data2}) {
-            return $decoded->{data2}; # legacy mode
+            return $decoded->{data2};
         }
+
         return $decoded;
     });
 }
