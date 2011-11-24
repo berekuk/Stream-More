@@ -5,8 +5,6 @@ package Stream::Simple;
 use strict;
 use warnings;
 
-use Yandex::Version '{{DEBIAN_VERSION}}';
-
 =head1 SYNOPSIS
 
     use Stream::Simple;

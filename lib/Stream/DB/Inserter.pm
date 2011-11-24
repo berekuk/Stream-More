@@ -22,8 +22,6 @@ use warnings;
 
 =cut
 
-use Yandex::Version '{{DEBIAN_VERSION}}';
-
 use parent qw(Stream::Out);
 use PPB::DB::Inserter;
 

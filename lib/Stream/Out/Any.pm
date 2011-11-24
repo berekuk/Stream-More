@@ -51,7 +51,6 @@ Otherwise (by default), order will be randomized.
 
 =cut
 
-use Yandex::Version '{{DEBIAN_VERSION}}';
 use Yandex::Logger;
 
 use parent qw(Stream::Out);

@@ -1,3 +1,9 @@
+libstream-more-perl (0.7.5) unstable; urgency=low
+
+  * don't use Yandex::Version - dzil-generated $VERSION is enough
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Thu, 24 Nov 2011 17:01:08 +0400
+
 libstream-more-perl (0.7.4) unstable; urgency=low
 
   * rollback removing 'data2' key in json formatter, add assert instead, so

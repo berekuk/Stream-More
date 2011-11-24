@@ -16,8 +16,6 @@ use warnings;
 
 =cut
 
-use Yandex::Version '{{DEBIAN_VERSION}}';
-
 use parent qw(Stream::Out);
 
 use Params::Validate qw(:all);
