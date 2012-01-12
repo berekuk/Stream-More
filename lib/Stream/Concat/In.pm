@@ -55,8 +55,8 @@ sub BUILD {
     my $self = shift;
 
     if (all {
-        $_->does('Stream::Moose::In::Lag')
-        or $_->does('Stream::In::Role::Lag')
+        $_->DOES('Stream::Moose::In::Lag')
+        or $_->DOES('Stream::In::Role::Lag')
     } @{ $self->in }) {
         apply_all_roles($self, 'Stream::Moose::In::Lag');
     }
@@ -92,7 +92,7 @@ Instances of this class implement C<lag()> method and C<Stream::Moose::In::Lag> 
 sub lag {
     my $self = shift;
 
-    die 'unimplemented' unless $self->does('Stream::Moose::In::Lag');
+    die 'unimplemented' unless $self->DOES('Stream::Moose::In::Lag');
 
     return sum(map { $_->lag } @{ $self->in });
 }
