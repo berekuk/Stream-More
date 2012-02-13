@@ -21,6 +21,18 @@ This is an output stream which balances all writes into several underlying outpu
 
 If some output streams fail on write or on commit, all uncommited writes into them will be copied into other output streams.
 
+=cut
+
+use Yandex::Logger;
+
+use parent qw(Stream::Out);
+
+use namespace::autoclean;
+use Params::Validate qw(:all);
+use Scalar::Util qw(blessed);
+use List::MoreUtils qw(all);
+use List::Util qw(shuffle);
+
 =head1 CONSTRUCTOR
 
 =over
@@ -50,17 +62,6 @@ Otherwise (by default), order will be randomized.
 =back
 
 =cut
-
-use Yandex::Logger;
-
-use parent qw(Stream::Out);
-
-use namespace::autoclean;
-use Params::Validate qw(:all);
-use Scalar::Util qw(blessed);
-use List::MoreUtils qw(all);
-use List::Util qw(shuffle);
-
 sub new {
     my $class = shift;
     my ($targets, @options) = validate_pos(@_, {
@@ -93,6 +94,22 @@ sub new {
         %$options,
     } => $class;
     return $self;
+}
+
+=head1 METHODS
+
+This class implements the common L<Stream::Out> API and these methods:
+
+=over
+
+=item B<targets()>
+
+Obtain arrayref with targets.
+
+=cut
+sub targets {
+    my $self = shift;
+    return $self->{targets};
 }
 
 sub write {
