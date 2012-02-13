@@ -61,6 +61,8 @@ Otherwise (by default), order will be randomized.
 
 =back
 
+=back
+
 =cut
 sub new {
     my $class = shift;
