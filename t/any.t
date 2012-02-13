@@ -147,7 +147,7 @@ sub revalidate :Test(3) {
 
 sub targets :Test(2) {
     my @t = map { code_out(sub {}) } 1..3;
-    my $out = Stream::Out::Any->new([@t]);
+    my $out = Stream::Out::Any->new([@t], { shuffle => 0 });
 
     is
         scalar($out->targets),
