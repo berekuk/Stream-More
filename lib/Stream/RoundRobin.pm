@@ -70,6 +70,8 @@ has '_buffer' => (
 
 =head1 METHODS
 
+Note that C<Stream::RoundRobin> implements all methods from L<Stream::Storage> and L<Stream::Moose::Storage::ClientList>.
+
 =over
 
 =cut
@@ -238,16 +240,40 @@ sub unregister_client {
     system('rm', '-rf', '--', $self->dir."/clients/$client");
 }
 
+=item B< in($client) >
+
+=item B< in($client, $options) >
+
+Get input stream by a client name.
+
+Input streams are wrapped in L<Stream::In::DuskBuffer> for convinience. You can pass C<< buffer => 0 >> as a second parameter to avoid this and get a raw L<Stream::In::DiskBuffer> object.
+(This can be useful, for example, if you process data in a single process and need more performance.)
+
+=cut
 sub in {
     my $self = shift;
-    my ($client) = pos_validated_list(\@_, { isa => ClientName });
-    return Stream::In::DiskBuffer->new(
-        Stream::RoundRobin::In->new(storage => $self, name => $client) => $self->dir."/clients/$client/buffer",
-        {
-            read_only => $self->read_only,
-            format => 'plain',
-        }
+    my ($client, $other) = pos_validated_list(\@_,
+        { isa => ClientName },
+        { isa => 'HashRef', default => {} },
     );
+    my ($use_buffer) = validated_list([ %$other ],
+        buffer => { isa => 'Bool', default => 1 },
+        MX_PARAMS_VALIDATE_CACHE_KEY => 'roundrobin-in-additional-options-validation', # sorry; see MooseX::Params::Validate docs
+    );
+
+    my $in = Stream::RoundRobin::In->new(storage => $self, name => $client);
+
+    if ($use_buffer) {
+        return Stream::In::DiskBuffer->new(
+            $in  => $self->dir."/clients/$client/buffer",
+            {
+                read_only => $self->read_only,
+                format => 'plain',
+            }
+        );
+    }
+
+    return $in;
 }
 
 sub description {

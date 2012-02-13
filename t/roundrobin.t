@@ -175,6 +175,15 @@ sub stress :Test {
     is_deeply(\@results, [ map { \@data } 0..9 ]);
 }
 
+sub in_options :Test(4) {
+    my $self = shift;
+    my $storage = $self->make_storage;
+    ok $storage->in('blah')->isa('Stream::In::DiskBuffer');
+    ok not $storage->in('blah')->isa('Stream::RoundRobin::In');
+    ok $storage->in('blah', { buffer => 0 })->isa('Stream::RoundRobin::In');
+    ok not $storage->in('blah', { buffer => 0 })->isa('Stream::In::DiskBuffer');
+}
+
 {
     my @tests;
 
