@@ -1,3 +1,9 @@
+libstream-more-perl (0.7.7) UNRELEASED; urgency=low
+
+  * Stream::In::DiskBuffer: fix adaptive chunk size calculation
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Mon, 13 Feb 2012 22:31:53 +0400
+
 libstream-more-perl (0.7.6) unstable; urgency=low
 
   * use and implement DOES() instead of does() when checking for capabilities

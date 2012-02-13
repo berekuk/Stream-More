@@ -229,7 +229,7 @@ sub read_chunk {
                 last;
             }
         }
-        $self->{uncommited}++;
+        $self->{uncommited} += @$data;
         $result ||= [];
         push @$result, @$data;
         $remaining -= @$data;
