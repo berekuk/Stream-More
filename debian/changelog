@@ -1,9 +1,9 @@
-libstream-more-perl (0.7.7) UNRELEASED; urgency=low
+libstream-more-perl (0.7.7) unstable; urgency=low
 
   * Stream::In::DiskBuffer: fix adaptive chunk size calculation
   * Stream::Out::Any: targets() method
 
- -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Mon, 13 Feb 2012 22:31:53 +0400
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Mon, 13 Feb 2012 22:41:07 +0400
 
 libstream-more-perl (0.7.6) unstable; urgency=low
 

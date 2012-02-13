@@ -145,4 +145,19 @@ sub revalidate :Test(3) {
     is(scalar(@data), 8 + 9);
 }
 
+sub targets :Test(2) {
+    my @t = map { code_out(sub {}) } 1..3;
+    my $out = Stream::Out::Any->new([@t]);
+
+    is
+        scalar($out->targets),
+        3,
+        'targets returns the correct number of streams';
+
+    is(
+        ($out->targets)[1],
+        $t[1],
+        'targets returns the correct objects');
+}
+
 __PACKAGE__->new->runtests;

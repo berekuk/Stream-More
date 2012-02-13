@@ -104,12 +104,12 @@ This class implements the common L<Stream::Out> API and these methods:
 
 =item B<targets()>
 
-Obtain arrayref with targets.
+Get the list of targets.
 
 =cut
 sub targets {
     my $self = shift;
-    return $self->{targets};
+    return @{ $self->{targets} };
 }
 
 sub write {
