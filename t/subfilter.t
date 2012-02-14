@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 3;
+use Test::More 0.95;
 
 use lib 'lib';
 
@@ -38,3 +38,5 @@ use Stream::Simple qw(array_in);
         { id => 3, value => "def", square => 9 },
     ]);
 }
+
+done_testing;

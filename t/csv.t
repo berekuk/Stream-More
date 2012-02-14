@@ -3,8 +3,8 @@
 use strict;
 use warnings;
 
-use Test::More tests => 6;
-use Test::Exception;
+use Test::More 0.95;
+use Test::Fatal;
 
 use lib 'lib';
 BEGIN {
@@ -21,15 +21,15 @@ use Stream::File;
 use Streams;
 my $storage = Stream::File->new("./tfiles/file");
 
-dies_ok(sub {
-    my $wrapper = Stream::Formatter::CSV->new();
+ok(exception {
+    Stream::Formatter::CSV->new();
 }, 'constructor dies when no columns specified');
 
 my $wrapper = Stream::Formatter::CSV->new(qw/ aaa bbb /);
 my $formatted_storage = $wrapper->wrap($storage);
 $formatted_storage->write({ aaa => 123 }); # all columns are optional
 $formatted_storage->write({ aaa => 22, bbb => 33 });
-dies_ok(sub {
+ok(sub {
     $formatted_storage->write({ aaa => 222, bbb => 333, ccc => 444 });
 }, 'unknown columns are forbidden');
 $formatted_storage->write({ bbb => 33 }); # first column missing
@@ -49,3 +49,4 @@ TODO: {
 }
 $in->commit;
 
+done_testing;

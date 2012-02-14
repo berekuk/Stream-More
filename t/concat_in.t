@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 2;
+use Test::More 0.95;
 
 use lib 'lib';
 
@@ -38,3 +38,5 @@ use Stream::Concat::In;
     process($in => code_out { push @result, @_ });
     is_deeply(['a'..'z'], \@result);
 }
+
+done_testing;

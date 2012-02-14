@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 4;
+use Test::More 0.95;
 use lib 'lib';
 
 use PPB::Test::TFiles;
@@ -53,8 +53,7 @@ sub bench {
     return time - $started;
 }
 
-# write parallelism
-{
+subtest 'write parallelism' => sub {
 
     my $total = 1000;
     my $portion = 100;
@@ -89,10 +88,9 @@ sub bench {
     diag("writing ".($total * $portion)." items using 1 process: $seq_time");
     diag("writing ".($total * $portion)." items using 10 processes: $parallel_time");
     cmp_ok($write_parallelism, '>', 4, '10 processes are faster than 1 process at least in 4 times');
-}
+};
 
-# write scaling
-{
+subtest 'write scaling' => sub {
     my $portion = 100;
     my $bench_write = sub {
         my $total = shift;
@@ -125,10 +123,9 @@ sub bench {
     diag("writing ".($portion * $baseline * 2 / 1000)."k items: $double_time");
     diag("writing ".($portion * $baseline * 4 / 1000)."k items: $quadro_time");
     cmp_ok($quadro_time / $time, '<', 5, 'write scales good enough');
-}
+};
 
-# read scaling
-{
+subtest 'read scaling' => sub {
 
     my $portion = 100;
     my $bench_read = sub {
@@ -172,9 +169,9 @@ sub bench {
     diag("reading ".($baseline * $portion * 4 / 1000)."k items: $quadro_time");
 
     cmp_ok($quadro_time / $time, '<', 8, 'read scales well enough');
-}
+};
 
-{
+subtest 'read scaling in large portions' => sub {
 
     my $portion = 1000;
     my $bench_read = sub {
@@ -218,4 +215,6 @@ sub bench {
     diag("reading ".($baseline * $portion * 4 / 1000)."k items in large portions: $quadro_time");
 
     cmp_ok($quadro_time / $time, '<', 8, 'read in large portions scales well enough');
-}
+};
+
+done_testing;
