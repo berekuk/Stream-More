@@ -67,6 +67,12 @@ Serialization format.
 
 Possible values are C<json> (default), C<storable> and C<plain>. Only C<storable> format can serialize perl objects, but it's unsafe to do so since private fields can be different on different hosts, so it's not a default (and please think twice before turning it on).
 
+=item I<ua>
+
+User agent object.
+
+Should conform to L<LWP::UserAgent> interface, defaults to C<< LWP::UserAgent->new >>.
+
 =back
 
 =cut
@@ -77,6 +83,7 @@ sub new {
         format => { default => 'json', regex => qr/^storable|json|plain$/ },
         endpoint => { type => SCALAR, optional => 1 },
         host => { type => SCALAR, optional => 1 },
+        ua => { can => 'request', default => LWP::UserAgent->new },
     });
 
     unless (defined $self->{endpoint} or $self->{host}) {
@@ -89,7 +96,6 @@ sub new {
         $self->{endpoint} = "http://$self->{host}:1248";
     }
 
-    $self->{ua} = LWP::UserAgent->new;
     $self->{filter} = $format2filter{$self->{format}} or die "invalid format '$self->{format}'";
     return bless $self => $class;
 }

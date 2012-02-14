@@ -3,6 +3,7 @@ libstream-more-perl (0.7.7) unstable; urgency=low
   * Stream::In::DiskBuffer: fix adaptive chunk size calculation
   * Stream::Out::Any: targets() method
   * Stream::RoundRobin: buffer => 0 option in in() method
+  * Stream::Propagate: allow overriding 'ua' via constructor parameters
 
  -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Mon, 13 Feb 2012 22:41:07 +0400
 
