@@ -11,7 +11,7 @@ use lib 't/lib';
 use Stream::Test::Out;
 
 use Stream::Out::Multiplex;
-use Stream::Simple qw(array_seq);
+use Stream::Simple qw(array_in);
 use Streams;
 
 my @v1;
@@ -20,7 +20,7 @@ my @v3;
 
 sub test :Test(3) {
     process(
-        array_seq([ 2, 3, 4 ])
+        array_in([ 2, 3, 4 ])
         =>
         Stream::Out::Multiplex->new([
             processor(sub { push @v1, shift() }),

@@ -9,11 +9,11 @@ use lib 'lib';
 
 use Stream::Filter::Subfilter;
 use Stream::Filter qw(filter);
-use Stream::Simple qw(array_seq);
+use Stream::Simple qw(array_in);
 
 {
     my $filter = filter(sub { return shift() ** 2 });
-    my $in = array_seq([
+    my $in = array_in([
         { id => 2, value => "abc" },
         { id => 3, value => "def" },
     ]);
@@ -27,7 +27,7 @@ use Stream::Simple qw(array_seq);
 # same test, but using write_chunk
 {
     my $filter = filter(sub { return shift() ** 2 });
-    my $in = array_seq([
+    my $in = array_in([
         { id => 2, value => "abc" },
         { id => 3, value => "def" },
     ]);

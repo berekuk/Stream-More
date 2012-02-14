@@ -10,13 +10,13 @@ use Test::Exception;
 use lib 'lib';
 
 use Stream::Out::Any;
-use Stream::Simple qw(array_seq code_out);
+use Stream::Simple qw(array_in code_out);
 use Streams;
 
 sub balance_three :Test(4) {
     my @v;
 
-    my $in = array_seq([ 5..15 ]);
+    my $in = array_in([ 5..15 ]);
     my $out = Stream::Out::Any->new([
         map {
             my $i = $_;
@@ -42,7 +42,7 @@ sub balance_three :Test(4) {
 sub balance_two :Test(3) {
     my @v;
 
-    my $in = array_seq([ 5..15 ]);
+    my $in = array_in([ 5..15 ]);
     my $out = Stream::Out::Any->new([
         (
             map {
@@ -77,7 +77,7 @@ sub invalidate :Test(3) {
     }
     my @v;
 
-    my $in = array_seq([ 5..15 ]);
+    my $in = array_in([ 5..15 ]);
     my $out = Stream::Out::Any->new([
         (
             map {
