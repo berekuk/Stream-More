@@ -12,6 +12,8 @@ use lib 'lib';
 use Test::Exception;
 use Stream::Propagate;
 
+use Compress::Zlib qw(compress);
+
 subtest 'simple write+commit' => sub {
     my %uri2contents;
     my $map_id = $mock_ua->map(qr{^\Qhttp://accept.stream.com:1248\E}, sub {
@@ -130,6 +132,34 @@ subtest 'storable format' => sub {
         { x => 5, y => 6 },
         'hashref decoded from storable format'
     );
+    $mock_ua->unmap($map_id);
+};
+
+subtest 'gzip' => sub {
+    my %uri2contents;
+    my $map_id = $mock_ua->map(qr{^\Qhttp://accept.stream.com:1248\E}, sub {
+        my $request = shift;
+        push @{ $uri2contents{$request->uri} }, $request->content;
+        return HTTP::Response->new(200, 'OK');
+    });
+
+    my $out = Stream::Propagate->new({
+        name => 'blah',
+        endpoint => 'http://accept.stream.com:1248',
+        format => 'plain',
+        gzip => 1,
+    });
+    $out->write("abc\n");
+    $out->write("def\n");
+    $out->commit;
+
+    my $expected_url = 'http://accept.stream.com:1248/accept?name=blah&format=plain&gzip=1';
+    is_deeply( [ keys %uri2contents ], [ $expected_url ], 'url when POSTing gzipped content');
+
+    is_deeply(\%uri2contents, {
+        'http://accept.stream.com:1248/accept?name=blah&format=plain&gzip=1' => [
+            compress("abc\ndef\n")
+        ]}, 'POST gzipped content');
     $mock_ua->unmap($map_id);
 };
 

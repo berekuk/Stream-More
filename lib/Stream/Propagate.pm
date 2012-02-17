@@ -34,6 +34,8 @@ use URI;
 use Streams qw(catalog);
 use Stream::Filter qw(filter);
 
+use Compress::Zlib qw(compress);
+
 use Carp;
 
 my %format2filter = (
@@ -81,6 +83,7 @@ sub new {
         endpoint => { type => SCALAR, optional => 1 },
         host => { type => SCALAR, optional => 1 },
         ua => { can => 'request', default => LWP::UserAgent->new },
+        gzip => { type => SCALAR, optional => 1 },
     });
 
     unless (defined $self->{endpoint} or $self->{host}) {
@@ -130,8 +133,14 @@ sub commit {
     $uri->query_form(
         name => $self->{name},
         format => $self->{format},
+        ($self->{gzip} ? (gzip => 1) : ()),
     );
-    my $response = $self->{ua}->request(POST $uri->as_string, Content_Type => 'text/plain', Content => join '', @{ $self->{buffer} });
+
+    my $content = join '', @{ $self->{buffer} };
+    if ($self->{gzip}) {
+        $content = compress($content);
+    }
+    my $response = $self->{ua}->request(POST $uri->as_string, Content_Type => 'text/plain', Content => $content);
     unless ($response->is_success) {
         croak "Propagating into $self->{name} at $self->{endpoint} failed: ".$response->status_line;
     }
