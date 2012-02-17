@@ -31,16 +31,13 @@ use LWP::UserAgent;
 use HTTP::Request::Common;
 use URI;
 
-use Stream::Formatter::JSON;
-use Stream::Formatter::LinedStorable;
+use Streams qw(catalog);
 use Stream::Filter qw(filter);
 
 use Carp;
 
 my %format2filter = (
-    json => Stream::Formatter::JSON->new->write_filter,
-    storable => Stream::Formatter::LinedStorable->new->write_filter,
-    plain => filter(sub { return shift }),
+    map { $_ => catalog->format($_)->write_filter } qw/ json storable plain /
 );
 
 =item B<< new($parameters) >>

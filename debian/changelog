@@ -1,3 +1,10 @@
+libstream-more-perl (0.7.8) UNRELEASED; urgency=low
+
+  * Stream::Propagate:
+   - load formats from catalog
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Fri, 17 Feb 2012 17:22:43 +0400
+
 libstream-more-perl (0.7.7) unstable; urgency=low
 
   * Stream::In::DiskBuffer: fix adaptive chunk size calculation
