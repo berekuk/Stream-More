@@ -3,10 +3,10 @@ package Stream::Moose::Storage::ClientList;
 # ABSTRACT: role for storages with named managed clients
 
 use Moose::Role;
-with
-    'Stream::Moose::FakeIsa' => { extra => ['Stream::Storage::Role::ClientList'] },
-    'Stream::Moose::Storage',
-;
+with 'Stream::Moose::Storage';
+
+use Class::DOES::Moose;
+extra_does 'Stream::Storage::Role::ClientList';
 
 requires
     'client_names',

@@ -78,14 +78,17 @@ Note that C<Stream::RoundRobin> implements all methods from L<Stream::Storage> a
 sub BUILD {
     my $self = shift;
     my $dir = $self->dir;
+
     unless (-d $dir) {
         mkdir $dir;
     }
-    my $lock = $self->_lock;
+    my $lock;
     unless (-d "$dir/clients") {
+        $lock ||= $self->_lock;
         mkdir "$dir/clients";
     }
     unless (-e "$dir/data") {
+        $lock ||= $self->_lock;
         open my $fh, '>', "$dir/data";
         my $count = $self->data_size;
 
@@ -281,7 +284,7 @@ sub description {
 
     return
         "dir: ".$self->dir."\n"
-        ."size: "..Format::Human::Bytes->new->base2($self->data_size)
+        ."size: ".Format::Human::Bytes->new->base2($self->data_size);
     ;
 }
 

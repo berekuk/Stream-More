@@ -377,13 +377,13 @@ Get total lag of this buffer and underlying stream.
 sub lag {
     my $self = shift;
     my $in = $self->in;
-    die "underlying input stream doesn't implement Lag role" unless $in->DOES('Stream::In::Role::Lag') or $in->DOES('Stream::Moose::In::Lag');
+    die "underlying input stream doesn't implement Lag role" unless $in->DOES('Stream::In::Role::Lag');
     return $in->lag + $self->buffer_lag;
 }
 
 sub DOES {
     my ($self, $role) = @_;
-    if ($role eq 'Stream::In::Role::Lag' or $role eq 'Stream::Moose::In::Lag') {
+    if ($role eq 'Stream::In::Role::Lag') {
         return $self->in->DOES($role);
     }
     return $self->SUPER::DOES($role);

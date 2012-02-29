@@ -44,7 +44,7 @@ sub array_in($) {
 Creates input stream which generates items by calling given callback.
 
 =cut
-sub code_in {
+sub code_in(&) {
     my ($callback) = validate_pos(@_, { type => CODEREF });
     return Stream::Simple::CodeIn->new($callback);
 }
