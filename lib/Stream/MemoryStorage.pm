@@ -13,6 +13,7 @@ use namespace::autoclean;
 use Carp;
 use Params::Validate qw(:all);
 use Stream::MemoryStorage::In;
+use List::Util qw(sum);
 
 sub new {
     my ($class) = validate_pos(@_, 1);
@@ -33,6 +34,13 @@ sub _read {
     my $self = shift;
     my $pos = shift;
     return $self->{data}[$pos];
+}
+
+sub _lag {
+    my $self = shift;
+    my ($pos) = @_;
+
+    return sum(map { length } @{$self->{data}}[ $pos .. @{$self->{data}} - 1 ]) || 0;
 }
 
 sub _lock_client {
@@ -82,7 +90,7 @@ sub unregister_client {
     delete $self->{client_lock}{$name};
 }
 
-sub stream {
+sub in {
     my $self = shift;
     my ($client) = validate_pos(@_, { type => SCALAR });
     unless ($self->_lock_client($client)) {
@@ -92,6 +100,12 @@ sub stream {
         storage => $self,
         client => $client,
     });
+}
+
+# ->stream is deprecated, use ->in instead
+sub stream {
+    my $self = shift;
+    return $self->in(@_);
 }
 
 1;
