@@ -151,7 +151,7 @@ subtest 'stress writing' => sub {
 subtest 'stress reading' => sub {
     PPB::Test::TFiles::import();
 
-    my $total = 1000;
+    my $total = $ENV{TOTAL} || 1000;
     {
         my $queue = Stream::Queue->new({ dir => 'tfiles/queue' });
         $queue->register_client('client');
