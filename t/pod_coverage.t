@@ -20,7 +20,8 @@ sub coverage_class {
     return 'Moose' if /^Stream::RoundRobin/
         or /^Stream::Moose/
         or /^Stream::Queue/
-        or /^Stream::Concat/;
+        or /^Stream::Concat/
+        or /^Stream::Filter::Coro/;
 
     return 'CountParents';
     # Pod::Coverage doesn't work well with moose roles.

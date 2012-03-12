@@ -1,3 +1,9 @@
+libstream-more-perl (0.8.1) UNRELEASED; urgency=low
+
+  * Stream::Moose::Filter role
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Mon, 12 Mar 2012 23:39:52 +0400
+
 libstream-more-perl (0.8.0) unstable; urgency=low
 
   * using Class::DOES::Moose to add extra DOES capabilities
