@@ -1,9 +1,9 @@
-libstream-more-perl (0.8.1) UNRELEASED; urgency=low
+libstream-more-perl (0.8.1) unstable; urgency=low
 
   * Stream::Moose::Filter role
   * Stream::Filter::Coro and filter_coro simple constructor
 
- -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Mon, 12 Mar 2012 23:39:52 +0400
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 13 Mar 2012 21:19:38 +0400
 
 libstream-more-perl (0.8.0) unstable; urgency=low
 
