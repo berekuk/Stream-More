@@ -15,7 +15,10 @@ with 'Stream::Moose::FakeIsa' => { extra => ['Stream::Filter'] };
 
 use Stream::Filter;
 use MooseX::Role::WithOverloading;
-use overload '|' => $Stream::Filter::{'(|'};
+use overload
+    '|' => $Stream::Filter::{'(|'},
+    '""' => sub { $_[0] },
+;
 
 requires 'write', 'write_chunk', 'commit';
 
