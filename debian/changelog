@@ -1,6 +1,7 @@
 libstream-more-perl (0.8.2) UNRELEASED; urgency=low
 
   * Stream::Moose::Filter::Buffered role
+  * use MooseX::MarkAsMethods instead of MooseX::Role::WithOverloading
 
  -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Wed, 14 Mar 2012 20:11:54 +0400
 

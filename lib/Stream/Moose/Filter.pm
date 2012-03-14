@@ -8,13 +8,11 @@ Moose-based stream filters should implement this role.
 
 =cut
 
-use namespace::clean -except => 'meta';
-
 use Moose::Role;
 with 'Stream::Moose::FakeIsa' => { extra => ['Stream::Filter'] };
+use MooseX::MarkAsMethods autoclean => 1;
 
 use Stream::Filter;
-use MooseX::Role::WithOverloading;
 use overload
     '|' => $Stream::Filter::{'(|'},
     '""' => sub { $_[0] },

@@ -21,9 +21,8 @@ Note that this role doesn't implement buffering!
 
 =cut
 
-use namespace::clean -except => 'meta';
+use namespace::autoclean;
 use Moose::Role;
-use MooseX::Role::WithOverloading;
 with 'Stream::Moose::Filter';
 
 sub write_chunk {
