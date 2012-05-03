@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 8;
+use Test::More 0.95;
 use Test::Mock::LWP::Dispatch;
 use HTTP::Response;
 
@@ -12,8 +12,9 @@ use lib 'lib';
 use Test::Exception;
 use Stream::Propagate;
 
-# simple write+commit
-{
+use Compress::Zlib qw(compress);
+
+subtest 'simple write+commit' => sub {
     my %uri2contents;
     my $map_id = $mock_ua->map(qr{^\Qhttp://accept.stream.com:1248\E}, sub {
         my $request = shift;
@@ -36,10 +37,9 @@ use Stream::Propagate;
 ) # TODO - replace exact matching with regex since x/y order is unpredictable
         ]}, 'commit commits, default format is json');
     $mock_ua->unmap($map_id);
-}
+};
 
-# error handling
-{
+subtest 'error handling' => sub {
     my $map_id = $mock_ua->map(qr{^\Qhttp://accept.stream.com:1248\E}, sub {
         return HTTP::Response->new(500, 'Oops');
     });
@@ -55,10 +55,9 @@ use Stream::Propagate;
         $out->commit;
     }, qr/Propagating into blah .* failed: .*Oops/, 'commit fails when POST fails');
     $mock_ua->unmap($map_id);
-}
+};
 
-# checks in plain format mode
-{
+subtest 'checks in plain format mode' => sub {
     my $out = Stream::Propagate->new({
         name => 'blah',
         endpoint => 'http://accept.stream.com:1248',
@@ -71,10 +70,9 @@ use Stream::Propagate;
     throws_ok(sub {
         $out->write('abc');
     }, qr/don't end with \\n/, "write fails when format is plain and item don't end in \\n");
-}
+};
 
-# plain format
-{
+subtest 'plain format' => sub {
     my %uri2contents;
     my $map_id = $mock_ua->map(qr{^\Qhttp://accept.stream.com:1248\E}, sub {
         my $request = shift;
@@ -98,10 +96,9 @@ def
 )
         ]}, 'POST in plain format');
     $mock_ua->unmap($map_id);
-}
+};
 
-# storable format
-{
+subtest 'storable format' => sub {
     my %uri2contents;
     my $map_id = $mock_ua->map(qr{^\Qhttp://accept.stream.com:1248\E}, sub {
         my $request = shift;
@@ -136,4 +133,34 @@ def
         'hashref decoded from storable format'
     );
     $mock_ua->unmap($map_id);
-}
+};
+
+subtest 'gzip' => sub {
+    my %uri2contents;
+    my $map_id = $mock_ua->map(qr{^\Qhttp://accept.stream.com:1248\E}, sub {
+        my $request = shift;
+        push @{ $uri2contents{$request->uri} }, $request->content;
+        return HTTP::Response->new(200, 'OK');
+    });
+
+    my $out = Stream::Propagate->new({
+        name => 'blah',
+        endpoint => 'http://accept.stream.com:1248',
+        format => 'plain',
+        gzip => 1,
+    });
+    $out->write("abc\n");
+    $out->write("def\n");
+    $out->commit;
+
+    my $expected_url = 'http://accept.stream.com:1248/accept?name=blah&format=plain&gzip=1';
+    is_deeply( [ keys %uri2contents ], [ $expected_url ], 'url when POSTing gzipped content');
+
+    is_deeply(\%uri2contents, {
+        'http://accept.stream.com:1248/accept?name=blah&format=plain&gzip=1' => [
+            compress("abc\ndef\n")
+        ]}, 'POST gzipped content');
+    $mock_ua->unmap($map_id);
+};
+
+done_testing;

@@ -49,6 +49,32 @@ sub test_concat :Tests {
     }
 }
 
+sub roles :Tests {
+    {
+        package FakeStorage;
+        use parent qw(Stream::Storage);
+    }
+
+    my $old = Stream::MemoryStorage->new;
+    my $new = Stream::MemoryStorage->new;
+
+    my $concat = Stream::Concat->new($old, $new);
+
+    ok scalar $concat->DOES('Stream::Storage'), 'concat DOES storage';
+    ok scalar $concat->DOES('Stream::Storage::Role::ClientList'), 'concat DOES client list';
+
+    ok scalar $concat->in('blah')->DOES('Stream::In'), 'concat in DOES in';
+    ok scalar $concat->in('blah')->DOES('Stream::In::Role::Lag'), 'concat in DOES lag';
+
+    $concat = Stream::Concat->new(FakeStorage->new, $new);
+
+    ok scalar $concat->DOES('Stream::Storage'), 'concat DOES storage in any case';
+    ok not(scalar $concat->DOES('Stream::Storage::Role::ClientList')), "concat DOES not do client list if old storage doesn't do it";
+
+    $concat = Stream::Concat->new($new, FakeStorage->new);
+    ok not(scalar $concat->DOES('Stream::Storage::Role::ClientList')), "concat DOES not do client list if new storage doesn't do it";
+}
+
 my $common_test = Stream::Test::Out->new(
     sub {
         Stream::Concat->new(

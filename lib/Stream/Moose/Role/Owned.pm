@@ -8,6 +8,9 @@ package Stream::Moose::Role::Owned;
 
 use Moose::Role;
 
+use Class::DOES::Moose;
+extra_does 'Stream::Role::Owned';
+
 has 'owner' => (
     is => 'ro',
     isa => 'Str',

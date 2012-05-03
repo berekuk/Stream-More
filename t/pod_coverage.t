@@ -20,7 +20,8 @@ sub coverage_class {
     return 'Moose' if /^Stream::RoundRobin/
         or /^Stream::Moose/
         or /^Stream::Queue/
-        or /^Stream::Concat/;
+        or /^Stream::Concat/
+        or /^Stream::Filter::Coro/;
 
     return 'CountParents';
     # Pod::Coverage doesn't work well with moose roles.
@@ -40,7 +41,7 @@ for my $module (all_modules()) {
     pod_coverage_ok($module, {
         coverage_class => "Pod::Coverage::$class",
         %$options,
-        also_private => [ qr/^BUILD$/ ],
+        also_private => [ qr/^BUILD|DOES$/ ],
     });
 }
 

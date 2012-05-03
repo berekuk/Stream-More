@@ -8,8 +8,8 @@ with 'Stream::Moose::In';
 sub read {
     my $self = shift;
     my $chunk = $self->read_chunk(1);
-    return unless $chunk;
-    return unless scalar @$chunk;
+    return undef unless $chunk;
+    return undef unless scalar @$chunk;
     confess "read_chunk returned too big chunk" if @$chunk > 1;
     return $chunk->[0];
 }

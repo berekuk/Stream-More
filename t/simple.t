@@ -12,7 +12,8 @@ use Stream::Test::Out;
 use Test::More;
 use Test::Exception;
 
-use Stream::Simple qw(code_in array_in code_out);
+use Streams qw(filter);
+use Stream::Simple qw(code_in array_in code_out coro_filter);
 
 # array_in - read (5)
 sub array_in_read :Test(5) {
@@ -59,6 +60,10 @@ sub code_in_test :Test(5) {
     is($in->read, 2);
     is($in->read, 1);
     is($in->read, undef);
+}
+
+sub coro_filter_test :Test(1) {
+    ok coro_filter(5 => filter {})->isa('Stream::Filter::Coro');
 }
 
 Test::Class->runtests(

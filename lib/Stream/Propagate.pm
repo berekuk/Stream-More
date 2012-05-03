@@ -31,16 +31,15 @@ use LWP::UserAgent;
 use HTTP::Request::Common;
 use URI;
 
-use Stream::Formatter::JSON;
-use Stream::Formatter::LinedStorable;
+use Streams qw(catalog);
 use Stream::Filter qw(filter);
+
+use Compress::Zlib qw(compress);
 
 use Carp;
 
 my %format2filter = (
-    json => Stream::Formatter::JSON->new->write_filter,
-    storable => Stream::Formatter::LinedStorable->new->write_filter,
-    plain => filter(sub { return shift }),
+    map { $_ => catalog->format($_)->write_filter } qw/ json storable plain /
 );
 
 =item B<< new($parameters) >>
@@ -67,6 +66,12 @@ Serialization format.
 
 Possible values are C<json> (default), C<storable> and C<plain>. Only C<storable> format can serialize perl objects, but it's unsafe to do so since private fields can be different on different hosts, so it's not a default (and please think twice before turning it on).
 
+=item I<ua>
+
+User agent object.
+
+Should conform to L<LWP::UserAgent> interface, defaults to C<< LWP::UserAgent->new >>.
+
 =back
 
 =cut
@@ -77,6 +82,8 @@ sub new {
         format => { default => 'json', regex => qr/^storable|json|plain$/ },
         endpoint => { type => SCALAR, optional => 1 },
         host => { type => SCALAR, optional => 1 },
+        ua => { can => 'request', default => LWP::UserAgent->new },
+        gzip => { type => SCALAR, optional => 1 },
     });
 
     unless (defined $self->{endpoint} or $self->{host}) {
@@ -89,7 +96,6 @@ sub new {
         $self->{endpoint} = "http://$self->{host}:1248";
     }
 
-    $self->{ua} = LWP::UserAgent->new;
     $self->{filter} = $format2filter{$self->{format}} or die "invalid format '$self->{format}'";
     return bless $self => $class;
 }
@@ -127,8 +133,14 @@ sub commit {
     $uri->query_form(
         name => $self->{name},
         format => $self->{format},
+        ($self->{gzip} ? (gzip => 1) : ()),
     );
-    my $response = $self->{ua}->request(POST $uri->as_string, Content_Type => 'text/plain', Content => join '', @{ $self->{buffer} });
+
+    my $content = join '', @{ $self->{buffer} };
+    if ($self->{gzip}) {
+        $content = compress($content);
+    }
+    my $response = $self->{ua}->request(POST $uri->as_string, Content_Type => 'text/plain', Content => $content);
     unless ($response->is_success) {
         croak "Propagating into $self->{name} at $self->{endpoint} failed: ".$response->status_line;
     }

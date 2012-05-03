@@ -2,6 +2,20 @@ package Stream::Concat::In;
 
 # ABSTRACT: concatenate several input streams
 
+=head1 SYNOPSIS
+
+    my $concat = Stream::Concat::In->new(@input_streams);
+
+    $concat->read; # read from the first one, then second, etc.
+
+=head1 DESCRIPTION
+
+Reads from the list of given input streams sequentially.
+
+Note that this module won't read from previous streams after it moved to subsequent ones, but it will return new data from the last stream if it appeared there, even if it returned undef previously.
+
+=cut
+
 use namespace::autoclean;
 use Moose;
 use Moose::Util qw(apply_all_roles);
@@ -54,32 +68,22 @@ sub BUILDARGS {
 sub BUILD {
     my $self = shift;
 
-    if (all {
-        $_->does('Stream::Moose::In::Lag')
-        or $_->does('Stream::In::Role::Lag')
-    } @{ $self->in }) {
+    # TODO - which solution is better, this one, or overriding DOES (like Stream::Concat does)?
+    if (all { $_->DOES('Stream::In::Role::Lag') } @{ $self->in }) {
         apply_all_roles($self, 'Stream::Moose::In::Lag');
-    }
-}
-
-sub read {
-    my $self = shift;
-
-    while (1) {
-        return if $self->current >= @{ $self->in };
-        my $item = $self->in->[ $self->current ]->read;
-        return $item if defined $item;
-        $self->current($self->current + 1);
     }
 }
 
 sub read_chunk {
     my $self = shift;
 
+    my $total_in = @{ $self->in };
+
     while (1) {
-        return if $self->current >= @{ $self->in };
+        return if $self->current >= $total_in;
         my $chunk = $self->in->[ $self->current ]->read_chunk(@_);
         return $chunk if defined $chunk;
+        return if $self->current == $total_in - 1;
         $self->current($self->current + 1);
     }
 }
@@ -91,9 +95,6 @@ Instances of this class implement C<lag()> method and C<Stream::Moose::In::Lag> 
 =cut
 sub lag {
     my $self = shift;
-
-    die 'unimplemented' unless $self->does('Stream::Moose::In::Lag');
-
     return sum(map { $_->lag } @{ $self->in });
 }
 
@@ -106,7 +107,7 @@ sub commit {
 
 =cut
 
-with 'Stream::Moose::In';
+with 'Stream::Moose::In::Chunked';
 
 =head1 SEE ALSO
 

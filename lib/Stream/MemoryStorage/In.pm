@@ -7,7 +7,10 @@ use warnings;
 
 use namespace::autoclean;
 use Params::Validate qw(:all);
-use parent qw(Stream::In);
+use parent qw(
+    Stream::In
+    Stream::In::Role::Lag
+);
 
 sub new {
     my $class = shift;
@@ -27,6 +30,11 @@ sub read {
 sub commit {
     my $self = shift;
     $self->{storage}->_set_client_pos($self->{client}, $self->{pos});
+}
+
+sub lag {
+    my $self = shift;
+    return $self->{storage}->_lag($self->{pos});
 }
 
 sub DESTROY {

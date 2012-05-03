@@ -175,6 +175,29 @@ sub stress :Test {
     is_deeply(\@results, [ map { \@data } 0..9 ]);
 }
 
+sub in_options :Test(4) {
+    my $self = shift;
+    my $storage = $self->make_storage;
+    ok $storage->in('blah')->isa('Stream::In::DiskBuffer');
+    ok not $storage->in('blah')->isa('Stream::RoundRobin::In');
+    ok $storage->in('blah', { buffer => 0 })->isa('Stream::RoundRobin::In');
+    ok not $storage->in('blah', { buffer => 0 })->isa('Stream::In::DiskBuffer');
+}
+
+sub check_does :Tests {
+    my $self = shift;
+    my $storage = $self->make_storage;
+
+    ok scalar $storage->DOES('Stream::Storage'), 'roundrobin DOES storage';
+    ok scalar $storage->DOES('Stream::Storage::Role::ClientList'), 'roundrobin DOES client list';
+    ok scalar $storage->DOES('Stream::Role::Description'), 'roundrobin DOES description';
+
+    ok scalar $storage->in('foo')->DOES('Stream::In'), 'roundrobin in DOES in';
+    ok scalar $storage->in('foo')->DOES('Stream::In::Role::Lag'), 'roundrobin in DOES lag';
+
+
+}
+
 {
     my @tests;
 

@@ -4,6 +4,9 @@ package Stream::Moose::Role::Description;
 
 use Moose::Role;
 
+use Class::DOES::Moose;
+extra_does 'Stream::Role::Description';
+
 =head1 METHODS
 
 =over

@@ -10,13 +10,13 @@ use Test::Exception;
 use lib 'lib';
 
 use Stream::Out::Any;
-use Stream::Simple qw(array_seq code_out);
+use Stream::Simple qw(array_in code_out);
 use Streams;
 
 sub balance_three :Test(4) {
     my @v;
 
-    my $in = array_seq([ 5..15 ]);
+    my $in = array_in([ 5..15 ]);
     my $out = Stream::Out::Any->new([
         map {
             my $i = $_;
@@ -42,7 +42,7 @@ sub balance_three :Test(4) {
 sub balance_two :Test(3) {
     my @v;
 
-    my $in = array_seq([ 5..15 ]);
+    my $in = array_in([ 5..15 ]);
     my $out = Stream::Out::Any->new([
         (
             map {
@@ -77,7 +77,7 @@ sub invalidate :Test(3) {
     }
     my @v;
 
-    my $in = array_seq([ 5..15 ]);
+    my $in = array_in([ 5..15 ]);
     my $out = Stream::Out::Any->new([
         (
             map {
@@ -143,6 +143,21 @@ sub revalidate :Test(3) {
     like(join('', @data), qr/^abcdefgh/, 'first 8 items went to good stream, rev stream was broken');
     is(scalar(@data_rev), 9, 'remaining items were distributed proportionally');
     is(scalar(@data), 8 + 9);
+}
+
+sub targets :Test(2) {
+    my @t = map { code_out(sub {}) } 1..3;
+    my $out = Stream::Out::Any->new([@t], { shuffle => 0 });
+
+    is
+        scalar($out->targets),
+        3,
+        'targets returns the correct number of streams';
+
+    is(
+        ($out->targets)[1],
+        $t[1],
+        'targets returns the correct objects');
 }
 
 __PACKAGE__->new->runtests;

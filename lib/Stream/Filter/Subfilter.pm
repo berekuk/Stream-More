@@ -15,7 +15,7 @@ use Params::Validate qw(:all);
     use Stream::Filter::Subfilter;
 
     $filter = filter(sub { return shift() ** 2 });
-    $in = array_seq([
+    $in = array_in([
         { id => 2, value => "abc" },
         { id => 3, value => "def" },
     ]);

@@ -18,6 +18,7 @@ use parent qw(
 =cut
 
 use Yandex::X;
+use Yandex::Logger;
 use Yandex::Lockf 3.0.0;
 use Stream::Formatter::LinedStorable;
 use Stream::Formatter::JSON;
@@ -41,11 +42,17 @@ sub new {
 
     my $file = "$dir/$id.chunk";
     my $wrapper = $format2wrapper{$opts->{format}};
-    my $storage = Stream::File->new("$file.new");
+
+    my $new_file = "$file.new";
+    if (-e $new_file) {
+        WARN "removing unexpected temporary file $new_file";
+        xunlink($new_file);
+    }
+    my $storage = Stream::File->new($new_file);
     $storage = $wrapper->wrap($storage) if $wrapper;
     $storage->write_chunk($data);
     $storage->commit;
-    xrename("$file.new" => $file);
+    xrename($new_file => $file);
 
     return $class->load($dir, $id, $opts);
 }

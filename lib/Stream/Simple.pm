@@ -20,13 +20,17 @@ use warnings;
 =cut
 
 use parent qw(Exporter);
-our @EXPORT_OK = qw/ array_seq array_in code_in code_out memory_storage /;
+our @EXPORT_OK = qw/
+    array_seq array_in code_in code_out memory_storage
+    coro_filter
+/;
 
 use Carp;
 use Stream::Simple::ArrayIn;
 use Stream::Simple::CodeIn;
 use Stream::MemoryStorage;
 use Stream::Simple::CodeOut;
+use Stream::Filter::Coro;
 use Params::Validate qw(:all);
 
 =item B<array_in($list)>
@@ -44,7 +48,7 @@ sub array_in($) {
 Creates input stream which generates items by calling given callback.
 
 =cut
-sub code_in {
+sub code_in(&) {
     my ($callback) = validate_pos(@_, { type => CODEREF });
     return Stream::Simple::CodeIn->new($callback);
 }
@@ -77,6 +81,25 @@ Construct new in-memory storage, i.e. instance of L<Stream::MemoryStorage>.
 =cut
 sub memory_storage() {
     return Stream::MemoryStorage->new();
+}
+
+=item B<< coro_filter($threads => $filter) >>
+
+Create L<Stream::Filter::Coro> filter.
+
+=cut
+sub coro_filter($$) {
+    my ($threads, $filter) = validate_pos(
+        @_,
+        { type => SCALAR, regex => qr/^\d+$/ },
+        { type => OBJECT },
+    );
+    $filter->DOES('Stream::Filter') or croak "Expected filter object, got $filter";
+
+    return Stream::Filter::Coro->new(
+        threads => $threads,
+        filter => $filter,
+    );
 }
 
 =back
