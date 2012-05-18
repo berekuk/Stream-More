@@ -18,7 +18,7 @@ use warnings;
    OR:
 
    skip_percent => '95' - percent of max data when we'll start skipping
- 
+
    max_data_size => 1024 * 1024 * 1024 - max data size of input stream
 
    lag_check_interval => 1000 - lag check interval in items
@@ -55,7 +55,7 @@ sub new {
     $self->{skip} = 0;
 
     $self->{max_lag} = ($self->{skip_percent} * $self->{max_data_size}) / 100 if $self->{max_lag} < 0;
-    
+
     return bless $self, $class;
 }
 
