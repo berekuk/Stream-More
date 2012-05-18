@@ -11,20 +11,6 @@ use warnings;
 
    $in = Stream::Skip->new($input_stream, {}); # constructor may has some options:
 
-   You may set:
-
-   mag_lag - for the max lag when we'll start skipping
-
-   OR:
-
-   skip_percent => '95' - percent of max data when we'll start skipping
-
-   max_data_size => 1024 * 1024 * 1024 - max data size of input stream
-
-   lag_check_interval => 1000 - lag check interval in items
-
-=over
-
 =cut
 
 use parent qw(
@@ -39,6 +25,37 @@ use Params::Validate qw(:all);
 use Carp;
 use Yandex::Logger;
 
+=head1 CONSTRUCTOR OPTIONS
+
+You may set either:
+
+=over
+
+=item *
+
+mag_lag - for the max lag when we'll start skipping
+
+=back
+
+OR:
+
+=over
+
+=item *
+
+skip_percent => '95' - percent of max data when we'll start skipping
+
+=item *
+
+max_data_size => 1024 * 1024 * 1024 - max data size of input stream
+
+=item *
+
+lag_check_interval => 1000 - lag check interval in items
+
+=over
+
+=cut
 sub new {
     my $class = shift;
     my ($in, @options) = validate_pos(@_, { type => OBJECT }, { type => HASHREF, optional => 1 });
@@ -58,6 +75,10 @@ sub new {
 
     return bless $self, $class;
 }
+
+=head1 METHODS
+
+=over
 
 =item B<check_lag()>
 
