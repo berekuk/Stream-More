@@ -11,7 +11,13 @@ use warnings;
 
    $in = Stream::Skip->new($input_stream, {}); # constructor may has some options:
 
-   skip_percent => '95' - percent of max data, when we shoul start to skip
+   You may set:
+
+   mag_lag - for the max lag when we'll start skipping
+
+   OR:
+
+   skip_percent => '95' - percent of max data when we'll start skipping
  
    max_data_size => 1024 * 1024 * 1024 - max data size of input stream
 

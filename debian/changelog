@@ -1,3 +1,15 @@
+libstream-more-perl (0.8.5) unstable; urgency=low
+
+  * Bump version
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Fri, 18 May 2012 10:42:35 +0400
+
+libstream-more-perl (0.8.4) unstable; urgency=low
+
+  * Skip filter
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Fri, 18 May 2012 10:42:12 +0400
+
 libstream-more-perl (0.8.3) unstable; urgency=low
 
   * Stream::In::DiskBuffer::Chunk: remove old chunk.new if it exists - should
