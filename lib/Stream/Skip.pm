@@ -53,7 +53,7 @@ max_data_size => 1024 * 1024 * 1024 - max data size of input stream
 
 lag_check_interval => 1000 - lag check interval in items
 
-=over
+=back
 
 =cut
 sub new {
