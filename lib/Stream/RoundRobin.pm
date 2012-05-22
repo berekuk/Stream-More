@@ -156,11 +156,11 @@ sub commit {
     sysseek($fh, $old_position, SEEK_SET);
 
     my $write = sub {
-        my $line = shift;
-        my $left = length $line;
+        # substr passed by reference
+        my $left = length $_[0];
         my $offset = 0;
         while ($left) {
-            my $bytes = $fh->syswrite($line, $left, $offset);
+            my $bytes = $fh->syswrite($_[0], $left, $offset);
             if (not defined $bytes) {
                 die "syswrite failed: $!";
             } elsif ($bytes == 0) {
@@ -192,17 +192,17 @@ sub commit {
         );
     }
 
-    for my $line (@$buffer) {
-        my $pos = sysseek($fh, 0, SEEK_CUR); # TODO - calculate from previous writes to avoid syscall?
-        if (length($line) + $pos < $self->data_size) {
-            $write->($line);
-        }
-        else {
-            $write->(substr($line, 0, $self->data_size - $pos));
-            sysseek($fh, 0, SEEK_SET);
-            $write->(substr($line, $self->data_size - $pos, length($line) + $pos - $self->data_size));
-        }
+    my $line = join "", @$buffer;
+    my $pos = sysseek($fh, 0, SEEK_CUR); # TODO - calculate from previous writes to avoid syscall?
+    if (length($line) + $pos < $self->data_size) {
+        $write->($line);
     }
+    else {
+        $write->(substr($line, 0, $self->data_size - $pos));
+        sysseek($fh, 0, SEEK_SET);
+        $write->(substr($line, $self->data_size - $pos, length($line) + $pos - $self->data_size));
+    }
+
     my $new_position = sysseek($fh, 0, SEEK_CUR);
     close $fh;
     # TODO - fsync?
