@@ -62,8 +62,14 @@ has 'data_size' => (
 
 has '_buffer' => (
     is => 'rw',
-    isa => 'ArrayRef[Str]',
-    default => sub { [] },
+    lazy => 1,
+    clearer => '_clear_buffer',
+    default => sub { my $x; \$x },
+);
+
+has '_buffer_lines' => (
+    is => 'rw',
+    default => 0,
 );
 
 =back
@@ -110,8 +116,11 @@ sub _lock {
 }
 
 sub write_chunk {
-    my ($self, $chunk) = (shift, shift);
-    push @{ $self->_buffer }, @$chunk;
+    my $self = shift;
+    my ($chunk) = @_;
+
+    ${$self->_buffer} .= join "", @$chunk;
+    $self->_buffer_lines($self->_buffer_lines + @$chunk);
 }
 
 =item B< position >
@@ -143,11 +152,11 @@ sub commit {
     my $self = shift;
 
     my $buffer = $self->_buffer;
-    return unless @$buffer;
+    return unless $$buffer;
 
     # if there will be an exception (because of cross_check, for example), storage will still stay usable
     # (but please don't rely on what I say here, it's mostly for tests)
-    $self->_buffer([]);
+    $self->_clear_buffer();
 
     my $lock = $self->_lock;
     open my $fh, '+<', $self->dir.'/data';
@@ -172,35 +181,32 @@ sub commit {
         }
     };
 
-    {
-        # let's check that new data will fit in the storage
-        my $buffer_length = sum(map { length $_ } @$buffer);
-        if ($buffer_length >= $self->data_size) {
-            confess "buffer is too large ($buffer_length bytes, ".scalar @$buffer." lines)"
-        }
-        my $left = int(sysseek($fh, 0, SEEK_CUR));
-        my $right = $left + $buffer_length;
-        $right -= $self->data_size if $right > $self->data_size;
-        check_cross(
-            left => $left,
-            right => $right,
-            size => $self->data_size,
-            positions => {
-                "storage's own" => $old_position,
-                map { $_ => $self->in($_)->in->position } $self->client_names,
-            },
-        );
+    # let's check that new data will fit in the storage
+    my $buffer_length = length $$buffer;
+    if ($buffer_length >= $self->data_size) {
+        confess "buffer is too large ($buffer_length bytes, ".$self->_buffer_lines." lines)"
     }
+    my $left = int(sysseek($fh, 0, SEEK_CUR));
+    my $right = $left + $buffer_length;
+    $right -= $self->data_size if $right > $self->data_size;
+    check_cross(
+        left => $left,
+        right => $right,
+        size => $self->data_size,
+        positions => {
+            "storage's own" => $old_position,
+            map { $_ => $self->in($_)->in->position } $self->client_names,
+        },
+    );
 
-    my $line = join "", @$buffer;
     my $pos = sysseek($fh, 0, SEEK_CUR); # TODO - calculate from previous writes to avoid syscall?
-    if (length($line) + $pos < $self->data_size) {
-        $write->($line);
+    if ($buffer_length + $pos < $self->data_size) {
+        $write->($$buffer);
     }
     else {
-        $write->(substr($line, 0, $self->data_size - $pos));
+        $write->(substr($$buffer, 0, $self->data_size - $pos));
         sysseek($fh, 0, SEEK_SET);
-        $write->(substr($line, $self->data_size - $pos, length($line) + $pos - $self->data_size));
+        $write->(substr($$buffer, $self->data_size - $pos, $buffer_length + $pos - $self->data_size));
     }
 
     my $new_position = sysseek($fh, 0, SEEK_CUR);
