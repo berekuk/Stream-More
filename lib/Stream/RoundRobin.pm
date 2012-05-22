@@ -47,7 +47,7 @@ has 'dir' => (
 
 =item B< data_size >
 
-Data size.
+Data size in bytes.
 
 RoundRobin storage always occupy this amount of space on disk (more or less).
 
@@ -70,6 +70,28 @@ has '_buffer' => (
 has '_buffer_lines' => (
     is => 'rw',
     default => 0,
+);
+
+=item B< buffer_size >
+
+Buffer size in bytes.
+
+Commit is forced anytime C< buffer_size > of buffered data is reached. Set to 0 to disable the feature.
+
+Default is 5% of C< data_size > or 10MB whichever is less.
+
+=cut
+
+has 'buffer_size' => (
+    is => 'ro',
+    isa => 'Int',
+    lazy => 1, # depends on $self->data_size
+    default => sub {
+        my $self = shift;
+        my $buffer_size = int($self->data_size * 0.05) + 1;
+        $buffer_size = 10 * 1024 * 1024 if $buffer_size > 10 * 1024 * 1024;
+        return $buffer_size;
+    },
 );
 
 =back
@@ -121,6 +143,9 @@ sub write_chunk {
 
     ${$self->_buffer} .= join "", @$chunk;
     $self->_buffer_lines($self->_buffer_lines + @$chunk);
+    if ($self->buffer_size and length ${$self->_buffer} > $self->buffer_size) {
+        $self->commit;
+    }
 }
 
 =item B< position >

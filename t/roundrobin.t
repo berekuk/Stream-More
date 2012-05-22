@@ -66,7 +66,7 @@ sub autocreate_dirs :Test(2) {
 
 sub write_and_check_data_file :Test(9) {
     my $self = shift;
-    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', data_size => 10);
+    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => 10);
     $storage->write("abc\n");
     $storage->commit;
 
@@ -196,6 +196,25 @@ sub check_does :Tests {
     ok scalar $storage->in('foo')->DOES('Stream::In::Role::Lag'), 'roundrobin in DOES lag';
 
 
+}
+
+sub buffer_size_default :Tests {
+    my $self = shift;
+    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', data_size => 1000);
+    $storage->write("foo\n");
+    is($storage->in("main")->read, undef, 'some buffer space available');
+    $storage->write("bar\n" x 50);
+    is($storage->in("main")->read, "foo\n", 'implicit commit after buffer overflow');
+}
+
+sub buffer_size_disable :Tests {
+    my $self = shift;
+    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => 1000);
+
+    $storage->write("x\n") for (1..499);
+    is($storage->in("main")->read, undef, 'implicit commit disabled');
+    $storage->commit;
+    is($storage->in("main")->read, "x\n", 'explicit commit ok');
 }
 
 {
