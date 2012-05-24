@@ -60,7 +60,7 @@ has 'data_size' => (
     default => 1024 * 1024 * 1024, # 1GB
 );
 
-has '_buffer' => (
+has '_buffer_ref' => (
     is => 'rw',
     lazy => 1,
     clearer => '_clear_buffer',
@@ -71,6 +71,11 @@ has '_buffer_lines' => (
     is => 'rw',
     default => 0,
 );
+
+after _clear_buffer => sub {
+    my $self = shift;
+    $self->_buffer_lines(0);
+};
 
 =item B< buffer_size >
 
@@ -141,9 +146,9 @@ sub write_chunk {
     my $self = shift;
     my ($chunk) = @_;
 
-    ${$self->_buffer} .= join "", @$chunk;
+    ${$self->_buffer_ref} .= join "", @$chunk;
     $self->_buffer_lines($self->_buffer_lines + @$chunk);
-    if ($self->buffer_size and length ${$self->_buffer} > $self->buffer_size) {
+    if ($self->buffer_size and length ${$self->_buffer_ref} > $self->buffer_size) {
         $self->commit;
     }
 }
@@ -176,8 +181,8 @@ sub set_position {
 sub commit {
     my $self = shift;
 
-    my $buffer = $self->_buffer;
-    return unless $$buffer;
+    my $buffer_ref = $self->_buffer_ref;
+    return unless $$buffer_ref;
 
     # if there will be an exception (because of cross_check, for example), storage will still stay usable
     # (but please don't rely on what I say here, it's mostly for tests)
@@ -207,7 +212,7 @@ sub commit {
     };
 
     # let's check that new data will fit in the storage
-    my $buffer_length = length $$buffer;
+    my $buffer_length = length $$buffer_ref;
     if ($buffer_length >= $self->data_size) {
         confess "buffer is too large ($buffer_length bytes, ".$self->_buffer_lines." lines)"
     }
@@ -226,12 +231,12 @@ sub commit {
 
     my $pos = sysseek($fh, 0, SEEK_CUR); # TODO - calculate from previous writes to avoid syscall?
     if ($buffer_length + $pos < $self->data_size) {
-        $write->($$buffer);
+        $write->($$buffer_ref);
     }
     else {
-        $write->(substr($$buffer, 0, $self->data_size - $pos));
+        $write->(substr($$buffer_ref, 0, $self->data_size - $pos));
         sysseek($fh, 0, SEEK_SET);
-        $write->(substr($$buffer, $self->data_size - $pos, $buffer_length + $pos - $self->data_size));
+        $write->(substr($$buffer_ref, $self->data_size - $pos, $buffer_length + $pos - $self->data_size));
     }
 
     my $new_position = sysseek($fh, 0, SEEK_CUR);
