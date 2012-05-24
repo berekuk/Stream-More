@@ -51,7 +51,7 @@ sub code_out_test :Test(6) {
 
     my @buffer;
     @data_out = ();
-    $p = code_out(sub { push @buffer, shift}, sub { push @data_out, @buffer });
+    $p = code_out(sub { push @buffer, shift}, sub { push @data_out, splice @buffer });
     for (@data_in) {
         $p->write($_);
     }

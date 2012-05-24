@@ -60,8 +60,11 @@ Obsolete alias for C<array_in()>. C<_seq> postfixes are reserved for C<PPB::Join
 =cut
 *array_seq = \&array_in;
 
-=item B<< code_out($coderef) >>
-=item B<< code_out($coderef, $coderef) >>
+=item B<< code_out($write) >>
+
+=item B<< code_out($write, $commit) >>
+
+B<$write> and B<$commit> should be coderefs.
 
 Creates anonymous output stream which calls specified callback on every C<write> call.
 It also will call commit callback, if it is specified and C<commit> is called.
