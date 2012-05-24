@@ -47,7 +47,7 @@ has 'dir' => (
 
 =item B< data_size >
 
-Data size.
+Data size in bytes.
 
 RoundRobin storage always occupy this amount of space on disk (more or less).
 
@@ -60,10 +60,43 @@ has 'data_size' => (
     default => 1024 * 1024 * 1024, # 1GB
 );
 
-has '_buffer' => (
+has '_buffer_ref' => (
     is => 'rw',
-    isa => 'ArrayRef[Str]',
-    default => sub { [] },
+    lazy => 1,
+    clearer => '_clear_buffer',
+    default => sub { my $x; \$x },
+);
+
+has '_buffer_lines' => (
+    is => 'rw',
+    default => 0,
+);
+
+after _clear_buffer => sub {
+    my $self = shift;
+    $self->_buffer_lines(0);
+};
+
+=item B< buffer_size >
+
+Buffer size in bytes.
+
+Commit is forced anytime C< buffer_size > of buffered data is reached. Set to 0 to disable the feature.
+
+Default is 5% of C< data_size > or 10MB whichever is less.
+
+=cut
+
+has 'buffer_size' => (
+    is => 'ro',
+    isa => 'Int',
+    lazy => 1, # depends on $self->data_size
+    default => sub {
+        my $self = shift;
+        my $buffer_size = int($self->data_size * 0.05) + 1;
+        $buffer_size = 10 * 1024 * 1024 if $buffer_size > 10 * 1024 * 1024;
+        return $buffer_size;
+    },
 );
 
 =back
@@ -110,8 +143,14 @@ sub _lock {
 }
 
 sub write_chunk {
-    my ($self, $chunk) = (shift, shift);
-    push @{ $self->_buffer }, @$chunk;
+    my $self = shift;
+    my ($chunk) = @_;
+
+    ${$self->_buffer_ref} .= join "", @$chunk;
+    $self->_buffer_lines($self->_buffer_lines + @$chunk);
+    if ($self->buffer_size and length ${$self->_buffer_ref} > $self->buffer_size) {
+        $self->commit;
+    }
 }
 
 =item B< position >
@@ -142,12 +181,12 @@ sub set_position {
 sub commit {
     my $self = shift;
 
-    my $buffer = $self->_buffer;
-    return unless @$buffer;
+    my $buffer_ref = $self->_buffer_ref;
+    return unless $$buffer_ref;
 
     # if there will be an exception (because of cross_check, for example), storage will still stay usable
     # (but please don't rely on what I say here, it's mostly for tests)
-    $self->_buffer([]);
+    $self->_clear_buffer();
 
     my $lock = $self->_lock;
     open my $fh, '+<', $self->dir.'/data';
@@ -156,11 +195,11 @@ sub commit {
     sysseek($fh, $old_position, SEEK_SET);
 
     my $write = sub {
-        my $line = shift;
-        my $left = length $line;
+        # substr passed by reference
+        my $left = length $_[0];
         my $offset = 0;
         while ($left) {
-            my $bytes = $fh->syswrite($line, $left, $offset);
+            my $bytes = $fh->syswrite($_[0], $left, $offset);
             if (not defined $bytes) {
                 die "syswrite failed: $!";
             } elsif ($bytes == 0) {
@@ -172,37 +211,34 @@ sub commit {
         }
     };
 
-    {
-        # let's check that new data will fit in the storage
-        my $buffer_length = sum(map { length $_ } @$buffer);
-        if ($buffer_length >= $self->data_size) {
-            confess "buffer is too large ($buffer_length bytes, ".scalar @$buffer." lines)"
-        }
-        my $left = int(sysseek($fh, 0, SEEK_CUR));
-        my $right = $left + $buffer_length;
-        $right -= $self->data_size if $right > $self->data_size;
-        check_cross(
-            left => $left,
-            right => $right,
-            size => $self->data_size,
-            positions => {
-                "storage's own" => $old_position,
-                map { $_ => $self->in($_)->in->position } $self->client_names,
-            },
-        );
+    # let's check that new data will fit in the storage
+    my $buffer_length = length $$buffer_ref;
+    if ($buffer_length >= $self->data_size) {
+        confess "buffer is too large ($buffer_length bytes, ".$self->_buffer_lines." lines)"
+    }
+    my $left = int(sysseek($fh, 0, SEEK_CUR));
+    my $right = $left + $buffer_length;
+    $right -= $self->data_size if $right > $self->data_size;
+    check_cross(
+        left => $left,
+        right => $right,
+        size => $self->data_size,
+        positions => {
+            "storage's own" => $old_position,
+            map { $_ => $self->in($_)->in->position } $self->client_names,
+        },
+    );
+
+    my $pos = sysseek($fh, 0, SEEK_CUR); # TODO - calculate from previous writes to avoid syscall?
+    if ($buffer_length + $pos < $self->data_size) {
+        $write->($$buffer_ref);
+    }
+    else {
+        $write->(substr($$buffer_ref, 0, $self->data_size - $pos));
+        sysseek($fh, 0, SEEK_SET);
+        $write->(substr($$buffer_ref, $self->data_size - $pos, $buffer_length + $pos - $self->data_size));
     }
 
-    for my $line (@$buffer) {
-        my $pos = sysseek($fh, 0, SEEK_CUR); # TODO - calculate from previous writes to avoid syscall?
-        if (length($line) + $pos < $self->data_size) {
-            $write->($line);
-        }
-        else {
-            $write->(substr($line, 0, $self->data_size - $pos));
-            sysseek($fh, 0, SEEK_SET);
-            $write->(substr($line, $self->data_size - $pos, length($line) + $pos - $self->data_size));
-        }
-    }
     my $new_position = sysseek($fh, 0, SEEK_CUR);
     close $fh;
     # TODO - fsync?
