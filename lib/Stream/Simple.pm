@@ -60,18 +60,24 @@ Obsolete alias for C<array_in()>. C<_seq> postfixes are reserved for C<PPB::Join
 =cut
 *array_seq = \&array_in;
 
-=item B<< code_out($coderef) >>
+=item B<< code_out($write) >>
+
+=item B<< code_out($write, $commit) >>
+
+B<$write> and B<$commit> should be coderefs.
 
 Creates anonymous output stream which calls specified callback on every C<write> call.
+It also will call commit callback, if it is specified and C<commit> is called.
 
 This is just another version of C<processor()> from C<Stream::Out>. I think C<processor()> will become deprecated someday, just to keep stream base classes clean and to make C<Stream::Simple> consistent and complete collection of common procedural-style stream builders.
 
 =cut
-sub code_out(&) {
-    my ($callback) = @_;
+sub code_out(&;&) {
+    my ($callback, $commit_callback) = @_;
     croak "Expected callback" unless ref($callback) eq 'CODE';
+    croak "Expected commit callback" if ($commit_callback && ref($commit_callback) ne 'CODE');
     # alternative constructor
-    return Stream::Simple::CodeOut->new($callback);
+    return Stream::Simple::CodeOut->new($callback, $commit_callback);
 }
 
 =item B<< memory_storage() >>

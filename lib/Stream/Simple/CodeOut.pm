@@ -8,13 +8,21 @@ use warnings;
 use parent qw(Stream::Out);
 
 sub new {
-    my ($class, $callback) = @_;
-    return bless { callback => $callback } => $class;
+    my ($class, $callback, $commit_callback) = @_;
+    return bless {
+        callback => $callback,
+        commit_callback => $commit_callback,
+    } => $class;
 }
 
 sub write {
     my ($self, $item) = @_;
     $self->{callback}->($item);
+}
+
+sub commit {
+    my ($self) = @_;
+    $self->{commit_callback}->() if $self->{commit_callback};
 }
 
 1;

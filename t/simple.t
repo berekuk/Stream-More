@@ -34,11 +34,12 @@ sub array_in_read_chunk :Test(3) {
     $s->commit; # does nothing, but shouldn't fail
 }
 
-sub code_out_test :Test(3) {
+sub code_out_test :Test(6) {
     my @data_in = ('a', 5, { x => 'y' });
     my @data_out;
 
     throws_ok(sub { &code_out('a') }, qr/Expected callback/, 'code_out throws exception when parameter is not a coderef');
+    throws_ok(sub { &code_out(sub { }, 'a') }, qr/Expected commit callback/, 'code_out throws exception when second parameter is not a coderef');
 
     my $p = code_out(sub { push @data_out, shift });
     ok($p->isa('Stream::Out'), 'code_out result looks like output stream');
@@ -47,6 +48,17 @@ sub code_out_test :Test(3) {
     }
     $p->commit;
     is_deeply(\@data_out, \@data_in, 'code_out result works as anonymous output stream');
+
+    my @buffer;
+    @data_out = ();
+    $p = code_out(sub { push @buffer, shift}, sub { push @data_out, splice @buffer });
+    for (@data_in) {
+        $p->write($_);
+    }
+    is_deeply(\@data_out, [], 'code_out waites for commit');
+
+    $p->commit;
+    is_deeply(\@data_out, \@data_in, 'code_out done commit callback');
 }
 
 sub code_in_test :Test(5) {
