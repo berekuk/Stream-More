@@ -1,3 +1,11 @@
+libstream-more-perl (0.10.0) unstable; urgency=low
+
+  * Commit callback in code_out
+  * RoundRobin: buffer_size option to enable implicit commit (flush). Is
+    turned on by default!
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Thu, 24 May 2012 22:37:40 +0400
+
 libstream-more-perl (0.9.0) unstable; urgency=low
 
   * Stream::Moose module with stream traits
