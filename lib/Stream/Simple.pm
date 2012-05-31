@@ -93,6 +93,9 @@ sub memory_storage() {
 
 Create L<Stream::Filter::Coro> filter.
 
+C<$filter> can be a callback returning C<Stream::Filter> object, or an actual C<Stream::Filter> object.
+Second mode is deprecated and can cause cryptic bugs if filter keeps any state.
+
 =cut
 sub coro_filter($$) {
     my ($threads, $filter) = validate_pos(
