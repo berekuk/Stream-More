@@ -41,7 +41,7 @@ for my $module (all_modules()) {
     pod_coverage_ok($module, {
         coverage_class => "Pod::Coverage::$class",
         %$options,
-        also_private => [ qr/^BUILD|DOES$/ ],
+        also_private => [ qr/^BUILD|DOES|DEMOLISH$/ ],
     });
 }
 
