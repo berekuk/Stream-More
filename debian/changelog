@@ -1,3 +1,9 @@
+libstream-more-perl (0.10.1) unstable; urgency=low
+
+  * check lag on create
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Thu, 31 May 2012 14:23:34 +0400
+
 libstream-more-perl (0.10.0) unstable; urgency=low
 
   * Commit callback in code_out

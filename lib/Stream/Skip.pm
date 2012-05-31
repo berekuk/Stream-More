@@ -69,9 +69,9 @@ sub new {
 
     $self->{in_stream} = $in;
     $self->{count} = 0;
-    $self->{skip} = 0;
 
     $self->{max_lag} = ($self->{skip_percent} * $self->{max_data_size}) / 100 if $self->{max_lag} < 0;
+    $self->{skip} = ($in->lag() >= $self->{max_lag});
 
     return bless $self, $class;
 }
