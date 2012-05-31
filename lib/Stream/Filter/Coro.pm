@@ -106,7 +106,6 @@ sub _read_all {
     while ($self->_out_channel->size) {
         my $result = $self->_out_channel->get;
         if (exists $result->{exception}) {
-            $self->_in_channel->shutdown;
             die $result->{exception};
         }
         else {
@@ -141,6 +140,15 @@ sub commit {
     $self->_clear_out;
 
     return @result;
+}
+
+sub DEMOLISH {
+    local $@;
+    my $self = shift;
+    if ($self->_has_coros) {
+        $self->_in_channel->shutdown;
+        $_->join for @{ $self->_coros };
+    }
 }
 
 =back

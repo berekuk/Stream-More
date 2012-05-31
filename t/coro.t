@@ -61,7 +61,6 @@ sub multiple_commits :Tests {
         return shift;
     };
 
-    my $time = time;
     my $coro_filter = Stream::Filter::Coro->new(
         threads => 5,
         filter => sub { $filter },
@@ -73,6 +72,45 @@ sub multiple_commits :Tests {
     }
     is scalar @result, 20;
     is_deeply [ sort { $a <=> $b } @result ], [ 1 .. 20 ];
+}
+
+sub destructor :Tests {
+
+    my $get_state_count = sub {
+        my @states;
+        @states = Coro::State::list;
+        return scalar @states;
+    };
+    my $orig_threads = $get_state_count->();
+
+    {
+        my $filter = filter {
+            cede;
+            return shift;
+        };
+        my $coro_filter = Stream::Filter::Coro->new(
+            threads => 4,
+            filter => sub { $filter },
+        );
+        process(array_in([ 1 .. 10 ]) => $coro_filter | code_out {});
+    }
+
+    is($orig_threads, $get_state_count->(), 'no threads leaked after processing');
+
+    {
+        my $filter = filter {
+            die "oops";
+        };
+        my $coro_filter = Stream::Filter::Coro->new(
+            threads => 4,
+            filter => sub { $filter },
+        );
+        eval {
+            process(array_in([ 1 .. 10 ]) => $filter | code_out {});
+        };
+    }
+
+    is($orig_threads, $get_state_count->(), 'no threads leaked after processing with exceptions');
 }
 
 __PACKAGE__->new->runtests;
