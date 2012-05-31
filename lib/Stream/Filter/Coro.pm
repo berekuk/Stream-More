@@ -126,6 +126,7 @@ sub write {
     my $self = shift;
     my ($item) = @_; # TODO - support additional parameters somehow?
     $self->_in_channel->put({ action => 'write', item => $item });
+    Coro::cede();
     return $self->_read_all;
 }
 
