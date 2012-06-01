@@ -6,7 +6,7 @@ package Stream::Filter::Coro;
 
     my $parallel_filter = Stream::Filter::Coro->new(
         threads => 5,
-        filter => sub { $filter }, # $filter must be Stream::Filter object
+        filter => sub { MyFilter->new }, # callback should create the new instance of filter to guarantee thread-safety
     );
     # now, just use $parallel_filter instead of $filter
 
