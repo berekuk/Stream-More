@@ -13,7 +13,6 @@ use namespace::autoclean;
 
 use Params::Validate qw(:all);
 
-use Carp;
 use Yandex::Logger;
 use DBI;
 use DBD::SQLite;
@@ -52,7 +51,7 @@ A local directory to store uncommited data. Right now the buffer is implemented 
 
 =item I<size>
 
-Maximum number of items to be stored in a temporary buffer. You have to commit hence discard some of them to get new ones.
+Maximum number of items to be stored in a temporary buffer. You have to commit hence discard some of them to get new ones. Set this option to 0 to disable buffer size control. 
 
 =back
 
@@ -63,14 +62,11 @@ sub new {
 
     my $self = validate(@options, {
         dir => 1,
-        size => { default => 10000 },
+        size => { default => 0 },
     });
     bless $self => $class;
     $self->{in} = ref $in eq "CODE" ? $in->() : $in;
-    $self->{_db_file} = "$self->{dir}/buffer.sqlite";
-    my $time = time;
-    our $guid = 0 unless defined $guid;
-    $self->{_guid} = "$time.$$.".$guid++;
+    $self->{_db_file} = "$self->{dir}/buffer.sqlite"; #TODO: glob("*.sqlite") and pick unlocked
 
     $self->_init_db();
 
@@ -83,12 +79,17 @@ sub _init_db {
         AutoCommit => 0,
         RaiseError => 1,
         PrintError => 0,
-    #   sqlite_handle_binary_nulls => 1,
     });
     $self->_upgrade();
-    ($self->{_id}) = $self->{_dbh}->selectrow_array(qq{
-        select max(id)+1 from buffer
-    });
+
+    $self->{_buffer} = $self->{_dbh}->selectall_arrayref(qq{
+        select id, data from buffer order by id
+    }); #FIXME: load lazy?
+
+    $self->{_id} = $self->{_buffer}->[-1]->[0] + 1 if @{$self->{_buffer}};
+    $self->{_id} ||= 0;
+
+    $self->{_db_size} = @{$self->{_buffer}}; 
 }
 
 sub _get_version ($) {
@@ -109,12 +110,8 @@ sub _upgrade_0_to_1 ($) {
     $dbh->do(qq{
         create table buffer (
             id bigint primary key,
-            lock text not null default '',
             data blob
         )}); # TODO: locked -> bigint?
-    $dbh->do(qq{
-        create index lock on buffer (lock)
-    });
     $dbh->commit();
 }
 
@@ -133,57 +130,33 @@ sub _load_from_in {
     my $self = shift;
     my ($limit, $result) = @_;
 
-    my $size = $self->{size};
-    my ($buffered) = $self->{_dbh}->selectrow_array(qq{
-        select count(1) from buffer
-    }); #FIXME: track internally
-
-    die "buffer exhausted: $buffered + $limit > $self->{size}" if $buffered + $limit > $self->{size};
+    die "buffer exhausted: $self->{_db_size} + $limit > $self->{size}" if $self->{size} and $self->{_db_size} + $limit > $self->{size};
 
     my $in = $self->{in};
-    # my $chunk = $in->read_chunk($size - $buffered); # Eager prefetching. Not the best idea.
-    my $chunk = $in->read_chunk($limit);
+    my $chunk = $in->read_chunk($limit); #TODO: load some more in advance?
 
     for my $data (@$chunk) {
-       
+
         my $id = $self->_id;
         push @$result, [$id => $data];
         $self->{_dbh}->do(qq{
-            insert into buffer (id, lock ,data) values (?, ?, ?)
-        }, undef, $id, $self->{_guid}, $data);
+            insert into buffer (id, data) values (?, ?)
+        }, undef, $id, $data); #TODO: prepare/execute?
 
     }
 
-    $self->{_dbh}->commit;
+    $self->{_dbh}->commit; # fsync?
     $in->commit;
-    return;
+    
+    $self->{_db_size} += @$chunk;
 }
 
-sub _load_from_db {
+sub _load_from_cache {
     my $self = shift;
     my ($limit, $result) = @_;
 
-    for (@{$self->{_dbh}->selectall_arrayref(qq{
-        select id, data from buffer where lock != ? limit ?
-    }, undef, $self->{_guid}, $limit - @$result)}) {
-
-        my ($id, $data) = @$_;
-        push @$result, [$id => $data];
-        $self->{_dbh}->do(qq{
-            update buffer set lock = ? where id = ?
-        }, undef, $self->{_guid}, $id);
-    }
-
-    $self->{_dbh}->commit;
-    return;
+    push @$result, splice @{$self->{_buffer}}, 0, $limit;
 }
-
-# TODO: could load from $self->{_buffer} but still have to update locks in db anyway
-#sub _load_from_mem {
-#    my $self = shift;
-#    my ($limit) = @_;
-#    ...
-#}
 
 sub read_chunk {
     my $self = shift;
@@ -191,9 +164,9 @@ sub read_chunk {
 
     my $result = [];
 
-    $self->_load_from_db($limit => $result);
+    $self->_load_from_cache($limit => $result);
     $limit -= @$result;
-    return if $limit <= 0;
+    return $result if $limit <= 0;
 
     $self->_load_from_in($limit => $result);
 
@@ -209,32 +182,25 @@ sub read {
 
 sub commit {
     my $self = shift;
+    my $ids = \@_;
 
-    for my $id (@_) {
-        $self->{_dbh}->do(qq{
+    for my $id (@$ids) {
+    
+        unless ($self->{_dbh}->do(qq{
             delete from buffer where id = ?
-        }, undef, $id);
+        }, undef, $id)) {
+            die "commit: unknown id: $id";
+        }
     }
     $self->{_dbh}->commit;
+    $self->{_db_size} -= @$ids;
 }
 
 sub lag {
     my $self = shift;
-    my $in_lag = $self->{in}->lag();
-    my ($db_lag) = $self->{_dbh}->selectrow_array(qq{
-        select sum(length(data)) from buffer
-    }); #FIXME: track internally?
-    return $in_lag + $db_lag;
-}
-
-sub DESTROY {
-    my $self = shift;
-    # preparing for multiprocessing support
-    $self->{_dbh}->do(qq{
-        update buffer set lock = '' where lock = ?
-    }, undef, $self->{_guid});
-    $self->{_dbh}->commit;
-    # TODO: gc - unset locks that are not flocked
+    my $lag = $self->{in}->lag();
+    $lag += length $_->[1] for @{$self->{_buffer}}; 
+    return $lag;
 }
 
 1;
