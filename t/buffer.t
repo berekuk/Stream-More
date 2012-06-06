@@ -26,7 +26,7 @@ sub simple :Tests {
     my $items = $mq->read_chunk(3);
     cmp_deeply($items, [ [ignore(), "a"], [ignore(), "b"], [ignore(), "c"] ]);
 
-    $mq->commit($items->[0]->[0], $items->[2]->[0]);
+    $mq->commit([$items->[0]->[0], $items->[2]->[0]]);
     undef $mq;
 
     $mq = Stream::In::Buffer->new($in, { dir => "tfiles/" });
@@ -49,7 +49,7 @@ sub id :Tests {
     $item = $mq->read();
     is($item->[0], 2, "autoincrement id after reset");
 
-    $mq->commit(0,1);
+    $mq->commit([0,1]);
     
     $mq = Stream::In::Buffer->new($in, { dir => "tfiles/" });
 
@@ -78,11 +78,27 @@ sub lazy :Tests {
 sub size :Tests {
     
     my $in = array_in(["a" .. "z"]);
-    my $mq = Stream::In::Buffer->new($in, { dir => "tfiles/", size => 4 });
+    my $mq = Stream::In::Buffer->new($in, { dir => "tfiles/", max_chunk_size => 4 });
     my $items = $mq->read_chunk(3);
-    throws_ok(sub { $mq->read_chunk(2) }, qr/exhausted/);
-    $mq->commit(map {$_->[0]} @$items);
-    lives_ok(sub { $mq->read_chunk(2) });
+    $mq->commit([map {$_->[0]} @$items]);
+    $items = $mq->read_chunk(3); # lives
+    throws_ok(sub { $mq->read_chunk(2) }, qr/exhausted/, "max_chunk_size check");
+}
+
+sub lag :Tests {
+
+    my $in = array_in(["a" .. "z"]);
+    my $mq = Stream::In::Buffer->new($in, { dir => "tfiles/" });
+
+    is($mq->lag(), 26);
+    my $items = $mq->read_chunk(10);
+    cmp_ok($mq->lag(), ">=", 16); #TODO: count uncommited
+    $mq->commit([map {$_->[0]} splice @$items, 0, 5]);
+
+    $mq = Stream::In::Buffer->new($in, { dir => "tfiles/", });
+    is($mq->lag(), 21);
+    $items = $mq->read_chunk(10);
+    cmp_ok($mq->lag(), ">=", 11);
 }
 
 __PACKAGE__->new->runtests;
