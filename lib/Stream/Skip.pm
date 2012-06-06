@@ -97,6 +97,7 @@ sub read {
         INFO "Skipped: $self->{count}" if $self->{skip};
         $self->{skip} = $self->check_lag();
         $self->{count} = 0;
+        $self->{in_stream}->commit();
     }
 
     my $item = $self->{in_stream}->read(@_);
@@ -110,6 +111,7 @@ sub read_chunk {
         INFO "Skipped: $self->{count}" if $self->{skip};
         $self->{skip} = $self->check_lag();
         $self->{count} = 0;
+        $self->{in_stream}->commit();
     }
 
     my $chunk = $self->{in_stream}->read_chunk($data_size);

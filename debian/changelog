@@ -1,3 +1,9 @@
+libstream-more-perl (0.11.1) unstable; urgency=low
+
+  * fix - commit in Skip
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Wed, 06 Jun 2012 16:56:25 +0400
+
 libstream-more-perl (0.11.0) unstable; urgency=low
 
   * refactor Stream::Filter::Coro - persistent coro threads
