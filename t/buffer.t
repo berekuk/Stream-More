@@ -43,6 +43,7 @@ sub id :Tests {
     my $item = $mq->read();
     is($item->[0], 1, "autoincrement id");
 
+    undef $mq;
     $mq = Stream::In::Buffer->new($in, { dir => "tfiles/" });
     $mq->read();
     $mq->read();
@@ -51,6 +52,7 @@ sub id :Tests {
 
     $mq->commit([0,1]);
     
+    undef $mq;
     $mq = Stream::In::Buffer->new($in, { dir => "tfiles/" });
 
     $mq->read();
@@ -82,7 +84,7 @@ sub size :Tests {
     my $items = $mq->read_chunk(3);
     $mq->commit([map {$_->[0]} @$items]);
     $items = $mq->read_chunk(3); # lives
-    throws_ok(sub { $mq->read_chunk(2) }, qr/exhausted/, "max_chunk_size check");
+    throws_ok(sub { $mq->read_chunk(2) }, qr/size exceeded/, "max_chunk_size check");
 }
 
 sub lag :Tests {
@@ -95,10 +97,36 @@ sub lag :Tests {
     cmp_ok($mq->lag(), ">=", 16); #TODO: count uncommited
     $mq->commit([map {$_->[0]} splice @$items, 0, 5]);
 
+    undef $mq; #FIXME: sum lags in all chunks!
     $mq = Stream::In::Buffer->new($in, { dir => "tfiles/", });
     is($mq->lag(), 21);
     $items = $mq->read_chunk(10);
     cmp_ok($mq->lag(), ">=", 11);
+}
+
+sub concurrent :Tests {
+
+    my $in = array_in(["a" .. "z"]);
+
+    my $mq1 = Stream::In::Buffer->new($in, { dir => "tfiles/" });
+    my $mq2 = Stream::In::Buffer->new($in, { dir => "tfiles/" });
+
+    $mq1->read_chunk(3);
+    $mq2->read_chunk(3);
+
+    undef $mq1;
+    undef $mq2;
+
+    $mq1 = Stream::In::Buffer->new($in, { dir => "tfiles/" });
+    $mq2 = Stream::In::Buffer->new($in, { dir => "tfiles/" });
+
+    my $items;
+    push @$items, @{$mq1->read_chunk(3)};
+    push @$items, @{$mq2->read_chunk(5)};
+
+    cmp_deeply([map { $_->[1] } @$items], bag("a" .. "h"));
+
+    throws_ok(sub { Stream::In::Buffer->new($in, { dir => "tfiles/", max_chunk_count => 2 }) }, qr/limit exceeded/);
 }
 
 __PACKAGE__->new->runtests;

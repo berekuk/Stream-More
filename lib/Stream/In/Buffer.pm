@@ -29,7 +29,6 @@ use Stream::Buffer::SQLite;
 =head1 DESCRIPTION
 
 MQ!
-No multiprocessing support.
 No read/only support.
 
 =head1 METHODS

@@ -16,6 +16,7 @@ use Params::Validate qw(:all);
 use Yandex::Logger;
 use DBI;
 use DBD::SQLite;
+use Yandex::Lockf 3.0.0;
 
 =head1 SYNOPSIS
 
@@ -29,7 +30,6 @@ use DBD::SQLite;
 =head1 DESCRIPTION
 
 MQ internals!
-No multiprocessing support.
 No read/only support.
 
 =head1 METHODS
@@ -59,6 +59,9 @@ Maximum number of SQLite databases to create. Multiple databases are required to
 =back
 
 =cut
+
+my $counter = 0;
+
 sub new {
     my $class = shift;
     my $self = validate(@_, { 
@@ -68,7 +71,27 @@ sub new {
     });
 
     bless $self => $class;
-    $self->{_db_file} = "$self->{dir}/buffer.sqlite"; #TODO: glob("*.sqlite") and pick unlocked
+
+    my @files = sort glob("$self->{dir}/*.sqlite");
+
+    for (@files, undef) {
+        my $file = $_;
+
+        unless ($file) {
+            die "Chunk limit exceeded: $self->{dir}" if $self->{max_chunk_count} and @files >= $self->{max_chunk_count};
+            $file = "$self->{dir}/" . time . ".$$." . $counter++ . ".sqlite";
+        }
+
+        my $lockf = lockf($file, { blocking => 0 });
+        unless ($lockf) {
+            die "failed to lock: $file" unless defined $_; # mystery - failed to lockf a unique filename
+            next;
+        }
+
+        $self->{_lockf} = $lockf;
+        $self->{_db_file} = $file;
+        last;
+    }
 
     $self->_init_db();
 
@@ -87,6 +110,7 @@ sub _init_db {
     $self->{_buffer} = $self->{_dbh}->selectall_arrayref(qq{
         select id, data from buffer order by id
     }); #FIXME: load lazy?
+    $self->{_dbh}->commit; # commit after select, yep
 
     $self->{_id} = $self->{_buffer}->[-1]->[0] + 1 if @{$self->{_buffer}};
     $self->{_id} ||= 0;
@@ -133,7 +157,7 @@ sub save {
     my ($chunk) = @_;
     my $limit = @$chunk;
 
-    die "buffer exhausted: $self->{_db_size} + $limit > $self->{max_chunk_size}" if $self->{max_chunk_size} and $self->{_db_size} + $limit > $self->{max_chunk_size};
+    die "Chunk size exceeded: $self->{dir}: $self->{_db_file}" if $self->{max_chunk_size} and $self->{_db_size} + $limit > $self->{max_chunk_size};
 
     for my $data (@$chunk) {
 
