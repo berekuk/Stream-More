@@ -1,3 +1,9 @@
+libstream-more-perl (0.11.3) unstable; urgency=low
+
+  * add coro_out function that writes into output stream in coros
+
+ -- nikita <nikita@yandex-team.ru>  Wed, 14 Jun 2012 23:01:21 +0400
+
 libstream-more-perl (0.11.2) unstable; urgency=low
 
   * Skip -> read commit on skip

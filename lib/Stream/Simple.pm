@@ -22,7 +22,7 @@ use warnings;
 use parent qw(Exporter);
 our @EXPORT_OK = qw/
     array_seq array_in code_in code_out memory_storage
-    coro_filter
+    coro_filter coro_out
 /;
 
 use Carp;
@@ -30,6 +30,7 @@ use Stream::Simple::ArrayIn;
 use Stream::Simple::CodeIn;
 use Stream::MemoryStorage;
 use Stream::Simple::CodeOut;
+use Stream::Filter qw/filter/;
 use Stream::Filter::Coro;
 use Params::Validate qw(:all);
 
@@ -78,6 +79,28 @@ sub code_out(&;&) {
     croak "Expected commit callback" if ($commit_callback && ref($commit_callback) ne 'CODE');
     # alternative constructor
     return Stream::Simple::CodeOut->new($callback, $commit_callback);
+}
+
+=item B<< coro_out($coderef) >>
+
+Creates anonymous output stream which calls specified callback on every C<write> call in coros.
+
+=cut
+sub coro_out {
+    my ($threads, $out) = validate_pos(
+        @_,
+        { type => SCALAR, regex => qr/^\d+$/ },
+        { type => OBJECT },
+    );
+    $out->DOES('Stream::Out') or croak "Expected Stream::Out object, got $out";
+
+    return coro_filter($threads => filter(sub {
+        $out->write(@_);
+        return;
+    }, sub {
+        $out->commit();
+        return;
+    })) | code_out(sub{});
 }
 
 =item B<< memory_storage() >>

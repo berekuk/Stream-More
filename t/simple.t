@@ -12,8 +12,8 @@ use Stream::Test::Out;
 use Test::More;
 use Test::Exception;
 
-use Streams qw(filter);
-use Stream::Simple qw(code_in array_in code_out coro_filter);
+use Streams qw(filter process);
+use Stream::Simple qw(code_in array_in code_out coro_filter coro_out memory_storage);
 
 # array_in - read (5)
 sub array_in_read :Test(5) {
@@ -76,6 +76,34 @@ sub code_in_test :Test(5) {
 
 sub coro_filter_test :Test(1) {
     ok coro_filter(5 => filter {})->isa('Stream::Filter::Coro');
+}
+
+sub coro_out_test :Test(4) {
+    my @result;
+
+    my $coro_out = coro_out(5, code_out(sub {
+        my $item = shift;
+        use Coro::AnyEvent;
+        Coro::AnyEvent::sleep(1);
+        push @result, $item;
+        return $item;
+    }));
+
+    ok $coro_out->isa('Stream::Out');
+
+    my $start = time;
+
+    process(
+        array_in([ 1 .. 10])
+        => $coro_out
+    );
+    my $end = time;
+    cmp_ok $end - $start, '<', 2.5;
+    cmp_ok $end - $start, '>', 1.5;
+
+    is_deeply
+    [1 .. 10],
+    [ sort { $a <=> $b } @result ];
 }
 
 Test::Class->runtests(
