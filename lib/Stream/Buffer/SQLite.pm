@@ -65,64 +65,80 @@ sub new {
     });
 
     bless $self => $class;
-
-    my @files = sort glob("$self->{dir}/*.sqlite");
-
-    for (@files, undef) {
-        my $file = $_;
-
-        unless ($file) {
-            die "Chunk limit exceeded: $self->{dir}" if $self->{max_chunk_count} and @files >= $self->{max_chunk_count};
-            $file = "$self->{dir}/" . time . ".$$." . $counter++ . ".sqlite";
-        }
-
-        my $lockf = lockf($file, { blocking => 0 });
-        unless ($lockf) {
-            die "failed to lock: $file" unless defined $_; # mystery - failed to lockf a unique filename
-            next;
-        }
-
-        $self->{_lockf} = $lockf;
-        $self->{_db_file} = $file;
-        last;
-    }
-
-    $self->_init_db();
+    $self->_create_buffer();
 
     return $self;
 }
 
-sub _init_db {
+sub DESTROY {
     my $self = shift;
-    $self->{_dbh} = DBI->connect("dbi:SQLite:dbname=$self->{_db_file}", "", "", {
-        AutoCommit => 0,
-        RaiseError => 1,
-        PrintError => 0,
-    });
-    $self->_upgrade();
+    unlink $self->{_db_file} unless $self->{_db_size};
+}
 
+sub _find_buffer {
+    my $self = shift;
+
+    my @files = sort glob("$self->{dir}/*.sqlite");
+    $self->{_chunk_count} = scalar(@files);
+
+    for my $file (@files) {
+        my $lockf = lockf($file, { blocking => 0 });
+        next unless $lockf;
+        return ($lockf, $file);
+    }
+    
+    return;
+}
+
+sub _create_buffer {
+    my $self = shift;
+
+    my ($lockf, $file) = $self->_find_buffer();
+
+    unless ($file) {
+        die "Chunk limit exceeded: $self->{dir}" if $self->{max_chunk_count} and $self->{_chunk_count} >= $self->{max_chunk_count};
+        $file = "$self->{dir}/" . time . ".$$." . $counter++ . ".sqlite";
+        $lockf = lockf($file, { blocking => 0 });
+        die "failed to lock: $file" unless $lockf; # mystery - failed to lockf a unique filename
+    }
+
+    $self->{_lockf} = $lockf;
+    $self->{_db_file} = $file;
+
+    $self->{_dbh} = $self->_init_db($file);
+    
     $self->{_buffer} = $self->{_dbh}->selectall_arrayref(qq{
         select id, data from buffer order by id
-    }); #FIXME: load lazy?
+    });
     $self->{_dbh}->commit; # commit after select, yep
 
     $self->{_id} = $self->{_buffer}->[-1]->[0] + 1 if @{$self->{_buffer}};
     $self->{_id} ||= 0;
 
-    $self->{_db_size} = @{$self->{_buffer}}; 
+    $self->{_db_size} = @{$self->{_buffer}};
 }
 
-sub _get_version ($) {
-    my ($self) = @_;
+sub _init_db {
+    my ($self, $file) = @_;
+    my $dbh = DBI->connect("dbi:SQLite:dbname=$file", "", "", {
+        AutoCommit => 0,
+        RaiseError => 1,
+        PrintError => 0,
+    });
+    $self->_upgrade($dbh);
+    return $dbh;
+}
+
+sub _get_version {
+    my ($self, $dbh) = @_;
     my $version = 0;
-    eval { ($version) = $self->{_dbh}->selectrow_array("select version from version") };
+    eval { ($version) = $dbh->selectrow_array("select version from version") };
     die if $@ and $@ !~ /no such table/;
     return $version;
 }
 
-sub _upgrade_0_to_1 ($) {
-    my ($self) = @_;
-    my $dbh = $self->{_dbh};
+sub _upgrade_0_to_1 {
+    my ($self, $dbh) = @_;
 
     $dbh->do("create table version (version int)");
     $dbh->do("insert into version (version) values (1)");
@@ -135,10 +151,10 @@ sub _upgrade_0_to_1 ($) {
     $dbh->commit();
 }
 
-sub _upgrade ($) {
-    my ($self) = @_;
-    my $version =$self->_get_version();
-    $self->_upgrade_0_to_1() if $version == 0;
+sub _upgrade {
+    my ($self, $dbh) = @_;
+    my $version = $self->_get_version($dbh);
+    $self->_upgrade_0_to_1($dbh) if $version == 0;
 }
 
 sub _id {
@@ -178,7 +194,37 @@ sub load {
     my ($limit) = @_;
     $limit ||= 1;
 
-    return [splice @{$self->{_buffer}}, 0, $limit];
+    my $result = [];
+
+    while () {
+
+        unless (@{$self->{_buffer}}) {
+
+            my ($lockf, $file) = $self->_find_buffer();
+            last unless $file;
+
+            my $dbh = $self->_init_db($file);
+
+            my $buffer = $dbh->selectcol_arrayref(qq{
+                select data from buffer
+            });
+            $dbh->commit;
+
+            push @$result, @{ $self->save($buffer, $limit - @$result) };
+
+            undef $dbh;
+            unlink $file or die "unlink failed: $!";
+            
+        } else {
+            
+            push @$result, splice @{$self->{_buffer}}, 0, $limit - @$result;
+        }
+
+        last if $limit <= @$result;
+
+    }
+
+    return $result;
 }
 
 sub delete {

@@ -11,6 +11,8 @@ use Test::Fatal;
 use lib 'lib';
 use PPB::Test::TFiles;
 
+use Yandex::X;
+
 use Stream::Simple qw(array_in code_in);
 use Stream::In::Buffer;
 
@@ -121,8 +123,8 @@ sub concurrent :Tests {
     $mq2 = Stream::In::Buffer->new($in, { dir => "tfiles/" });
 
     my $items;
-    push @$items, @{$mq1->read_chunk(3)};
-    push @$items, @{$mq2->read_chunk(5)};
+    push @$items, @{$mq1->read_chunk(4)};
+    push @$items, @{$mq2->read_chunk(4)};
 
     cmp_deeply([map { $_->[1] } @$items], bag("a" .. "h"));
 
@@ -135,6 +137,32 @@ sub read_chunk :Tests {
 
     cmp_deeply($mq->read_chunk(3), [[ ignore(), "a" ], [ ignore(), "b" ]]);
     is($mq->read_chunk(2), undef); # not []!
+}
+
+sub buffers :Tests {
+    my $in = array_in(["a" .. "z"]);
+    
+    my @mq = map { Stream::In::Buffer->new($in, { dir => "tfiles/" }) } (1 .. 4);
+    $_->read_chunk(2) for @mq;
+    undef @mq;
+
+    my $mq1 = Stream::In::Buffer->new($in, { dir => "tfiles/" });
+    my $mq2 = Stream::In::Buffer->new($in, { dir => "tfiles/" });
+
+    my ($items1, $items2);
+
+    push @$items1, @{$mq1->read_chunk(6)};
+    is({ map { ($_->[1] => 1) } @$items1 }->{"i"}, undef, "switch to another unlocked buffer");
+
+    push @$items2, @{$mq2->read_chunk(4)};
+    cmp_deeply([map { $_->[1] } @$items1, @$items2], bag("a" .. "j"), "all pending buffers fetched");
+
+    $mq2->commit([map { $_->[0] } @$items2]);
+    undef $mq1;
+    undef $mq2;
+
+    is(int(xqx("ls tfiles/ | wc -l")), 1, "buffers are merged and purged");
+            
 }
 
 __PACKAGE__->new->runtests;
