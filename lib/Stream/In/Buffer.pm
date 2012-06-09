@@ -35,11 +35,11 @@ No read/only support.
 
 =over
 
-=item B<< new($in, $options) >>
+=item B<< new($in, $params) >>
 
 Constructor.
 
-C<$options> are Stream::Buffer::SQLite constructor options. 
+C<$params> are Stream::Buffer::SQLite constructor params.
 
 =cut
 sub new {
@@ -53,7 +53,7 @@ sub new {
     });
     my $self = {};
     bless $self => $class;
-    $self->{in} = ref $in eq "CODE" ? $in->() : $in;
+    $self->{in} = ref $in eq "CODE" ? $in : sub { $in };
     $self->{buffer} = Stream::Buffer::SQLite->new($opts);
 
     return $self;
@@ -68,13 +68,15 @@ sub read_chunk {
     $limit -= @$result;
     return $result if $limit <= 0;
 
-    my $in = $self->{in};
+    my $in = $self->{in}->();
+    # $in is supposed to be thread-safe
     my $chunk = $in->read_chunk($limit); #TODO: load some more in advance?
-    $self->{buffer}->save($chunk);
-    $in->commit;
+    if ($chunk) {
+        push @$result, @{$self->{buffer}->save($chunk, $limit)} if @$chunk;
+        $in->commit;
+    }
 
-    push @$result, @{$self->{buffer}->load($limit)};
-
+    return unless @$result;
     return $result;
 }
 
@@ -95,7 +97,7 @@ sub commit {
 
 sub lag {
     my $self = shift;
-    my $lag = $self->{in}->lag();
+    my $lag = $self->{in}->()->lag();
     $lag += $self->{buffer}->lag();
     return $lag;
 }

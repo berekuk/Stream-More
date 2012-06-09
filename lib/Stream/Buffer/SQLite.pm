@@ -1,13 +1,9 @@
 package Stream::Buffer::SQLite;
 
-# ABSTRACT: stream decorator to allow non sequential commits
+# ABSTRACT: ulitily class to store uncommited data in a local sqlite buffers
 
 use strict;
 use warnings;
-
-use parent qw(
-    Stream::In
-);
 
 use namespace::autoclean;
 
@@ -29,24 +25,22 @@ use Yandex::Lockf 3.0.0;
 
 =head1 DESCRIPTION
 
-MQ internals!
 No read/only support.
 
 =head1 METHODS
 
 =over
 
-=item B<< new($options) >>
+=item B<< new($params) >>
+=item B<< new(%$params) >>
 
-Constructor.
-
-C<$options> is an optional hash with options:
+Constructor. 
 
 =over
 
 =item I<dir>
 
-A local directory to store uncommited data. The buffer is implemented as a set of SQLite databases.
+A local directory to store uncommited data. The buffer is implemented as a set of SQLite databases. This parameter is mandatory. 
 
 =item I<max_chunk_size>
 
@@ -54,7 +48,7 @@ Maximum number of items to be stored in a single SQLite database. 1000 by defaul
 
 =item I<max_chunk_count>
 
-Maximum number of SQLite databases to create. Multiple databases are required to provide a concurrent access to the buffer.
+Maximum number of SQLite databases to create. 100 by default. Multiple databases are required to provide a concurrent access to the buffer.
 
 =back
 
@@ -154,15 +148,19 @@ sub _id {
 
 sub save {
     my $self = shift;
-    my ($chunk) = @_;
-    my $limit = @$chunk;
+    my ($chunk, $limit) = @_;
+    my $chunk_size = @$chunk;
 
-    die "Chunk size exceeded: $self->{dir}: $self->{_db_file}" if $self->{max_chunk_size} and $self->{_db_size} + $limit > $self->{max_chunk_size};
+    die "Chunk size exceeded: $self->{dir}: $self->{_db_file}" if $self->{max_chunk_size} and $self->{_db_size} + $chunk_size > $self->{max_chunk_size};
+
+    my $result = [];
 
     for my $data (@$chunk) {
 
         my $id = $self->_id;
-        push @{$self->{_buffer}}, [$id => $data];
+        my $push = $limit-- > 0 ? $result : $self->{_buffer};
+        push @$push, [$id => $data];
+
         $self->{_dbh}->do(qq{
             insert into buffer (id, data) values (?, ?)
         }, undef, $id, $data); #TODO: prepare/execute?
@@ -172,6 +170,7 @@ sub save {
     $self->{_dbh}->commit; # fsync?
 
     $self->{_db_size} += @$chunk;
+    return $result;
 }
 
 sub load {

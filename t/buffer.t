@@ -6,7 +6,7 @@ use warnings;
 use parent qw(Test::Class);
 use Test::More;
 use Test::Deep;
-use Test::Exception;
+use Test::Fatal;
 
 use lib 'lib';
 use PPB::Test::TFiles;
@@ -84,7 +84,7 @@ sub size :Tests {
     my $items = $mq->read_chunk(3);
     $mq->commit([map {$_->[0]} @$items]);
     $items = $mq->read_chunk(3); # lives
-    throws_ok(sub { $mq->read_chunk(2) }, qr/size exceeded/, "max_chunk_size check");
+    like(exception { $mq->read_chunk(2) }, qr/size exceeded/, "max_chunk_size check");
 }
 
 sub lag :Tests {
@@ -126,7 +126,15 @@ sub concurrent :Tests {
 
     cmp_deeply([map { $_->[1] } @$items], bag("a" .. "h"));
 
-    throws_ok(sub { Stream::In::Buffer->new($in, { dir => "tfiles/", max_chunk_count => 2 }) }, qr/limit exceeded/);
+    like(exception { Stream::In::Buffer->new($in, { dir => "tfiles/", max_chunk_count => 2 }) }, qr/limit exceeded/);
+}
+
+sub read_chunk :Tests {
+    my $in = array_in(["a", "b"]);
+    my $mq = Stream::In::Buffer->new($in, { dir => "tfiles/" });
+
+    cmp_deeply($mq->read_chunk(3), [[ ignore(), "a" ], [ ignore(), "b" ]]);
+    is($mq->read_chunk(2), undef); # not []!
 }
 
 __PACKAGE__->new->runtests;
