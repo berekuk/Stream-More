@@ -90,7 +90,8 @@ sub read {
 sub commit {
     my $self = shift;
     my ($ids) = @_;
-    die "full commit unsupported, specify ids" unless $ids;
+
+    return unless $ids; # process($mq => code_out(sub { [$id, $item] = shift; ... $mq->commit([$id]) }));
 
     $self->{buffer}->delete($ids);
 }

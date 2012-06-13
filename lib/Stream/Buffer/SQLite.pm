@@ -72,7 +72,8 @@ sub new {
 
 sub DESTROY {
     my $self = shift;
-    unlink $self->{_db_file} unless $self->{_db_size};
+    $self->{_dbh}->rollback() if $self->{_dbh};
+    unlink $self->{_db_file} if $self->{_db_file} and $self->{_db_size} == 0;
 }
 
 sub _find_buffer {
@@ -233,9 +234,11 @@ sub delete {
 
     for my $id (@$ids) {
     
-        unless ($self->{_dbh}->do(qq{
+        my $deleted = $self->{_dbh}->do(qq{
             delete from buffer where id = ?
-        }, undef, $id)) {
+        }, undef, $id);
+
+        if ($deleted == 0) {
             die "commit: unknown id: $id";
         }
     }

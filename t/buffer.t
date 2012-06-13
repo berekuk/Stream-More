@@ -165,4 +165,25 @@ sub buffers :Tests {
             
 }
 
+sub commit :Tests {
+    my $in = array_in(["a" .. "z"]);
+
+    my $mq = Stream::In::Buffer->new($in, { dir => "tfiles/" });
+    my $item = $mq->read();
+    is($item->[1], "a");
+    $mq->commit([$item->[0]]);
+    undef $mq;
+
+    $mq = Stream::In::Buffer->new($in, { dir => "tfiles/" });
+    $item = $mq->read();
+    is($item->[1], "b");
+    $mq->commit();
+    undef $mq;
+
+    $mq = Stream::In::Buffer->new($in, { dir => "tfiles/" });
+    $item = $mq->read();
+    is($item->[1], "b");
+    like(exception { $mq->commit([42]) }, qr/unknown id/);
+}
+
 __PACKAGE__->new->runtests;
