@@ -90,13 +90,13 @@ sub coro_out {
     my ($threads, $callback) = @_;
     croak "Expected callback" unless ref($callback) eq 'CODE';
 
-    return coro_filter($threads => filter(sub {
+    return coro_filter($threads => sub { filter(sub {
           $callback->()->write(@_);
           return;
-      }, sub {
+      }
+      , sub {
           $callback->()->commit();
-          return;
-      })) | code_out(sub{});
+      })}) | code_out(sub{});
 }
 
 =item B<< memory_storage() >>
@@ -120,9 +120,12 @@ sub coro_filter($$) {
     my ($threads, $filter) = validate_pos(
         @_,
         { type => SCALAR, regex => qr/^\d+$/ },
-        { type => OBJECT },
+        { type => OBJECT | CODEREF },
     );
-    $filter->DOES('Stream::Filter') or croak "Expected filter object, got $filter";
+
+    unless (ref($filter) eq 'CODE') {
+        $filter->DOES('Stream::Filter') or croak "Expected filter object, got $filter";
+    }
 
     return Stream::Filter::Coro->new(
         threads => $threads,
