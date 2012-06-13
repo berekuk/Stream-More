@@ -274,4 +274,8 @@ sub lag {
     return $lag;
 }
 
+=back
+
+=cut
+
 1;
