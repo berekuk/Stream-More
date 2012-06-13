@@ -71,6 +71,7 @@ sub new {
 }
 
 sub DESTROY {
+    local $@;
     my $self = shift;
     $self->{_dbh}->rollback() if $self->{_dbh};
     unlink $self->{_db_file} if $self->{_db_file} and $self->{_db_size} == 0;
