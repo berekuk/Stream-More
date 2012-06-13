@@ -81,14 +81,17 @@ sub coro_filter_test :Test(1) {
 sub coro_out_test :Test(4) {
     my @result;
 
-    my $coro_out = coro_out(5, code_out(sub {
+    my $code_out = sub { code_out( sub {
         my $item = shift;
         use Coro::AnyEvent;
         Coro::AnyEvent::sleep(1);
         push @result, $item;
         return $item;
-    }));
+    })};
 
+    my $code_out = sub { return $queue; };
+
+    my $coro_out = coro_out(5 => $code_out);
     ok $coro_out->isa('Stream::Out');
 
     my $start = time;
@@ -104,6 +107,8 @@ sub coro_out_test :Test(4) {
     is_deeply
     [1 .. 10],
     [ sort { $a <=> $b } @result ];
+
+    $coro_out->commit;
 }
 
 Test::Class->runtests(
