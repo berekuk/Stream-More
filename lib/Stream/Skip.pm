@@ -94,10 +94,12 @@ sub read {
     my $self = shift;
 
     if ($self->{count}++ >= $self->{lag_check_interval}) {
-        INFO "Skipped: $self->{count}" if $self->{skip};
+        if ($self->{skip}) {
+            INFO "Skipped: $self->{count}";
+            $self->{in_stream}->commit();
+        }
         $self->{skip} = $self->check_lag();
         $self->{count} = 0;
-        $self->{in_stream}->commit();
     }
 
     my $item = $self->{in_stream}->read(@_);
@@ -108,10 +110,12 @@ sub read_chunk {
     my ($self, $data_size) = @_;
 
     if (($self->{count} += $data_size) >= $self->{lag_check_interval}) {
-        INFO "Skipped: $self->{count}" if $self->{skip};
+        if ($self->{skip}) {
+            INFO "Skipped: $self->{count}";
+            $self->{in_stream}->commit();
+        }
         $self->{skip} = $self->check_lag();
         $self->{count} = 0;
-        $self->{in_stream}->commit();
     }
 
     my $chunk = $self->{in_stream}->read_chunk($data_size);
