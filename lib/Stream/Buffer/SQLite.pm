@@ -163,6 +163,11 @@ sub _id {
     return $self->{_id}++;
 }
 
+=item B<save($chunk, $limit)>
+
+Save C<@$chunk> items into a buffer, enumerate them and return up to C<$limit> of them back.
+
+=cut
 sub save {
     my $self = shift;
     my ($chunk, $limit) = @_;
@@ -190,6 +195,11 @@ sub save {
     return $result;
 }
 
+=item B<load($limit)>
+
+Load up to C<$limit> enumerated items from a buffer.
+
+=cut
 sub load {
     my $self = shift;
     my ($limit) = @_;
@@ -228,6 +238,11 @@ sub load {
     return $result;
 }
 
+=item B<delete($ids)>
+
+Remove items identified by C<@$ids> from the buffer.
+
+=cut
 sub delete {
     my $self = shift;
     my ($ids) = @_; #TODO: no ids => delete everything already loaded
@@ -246,6 +261,12 @@ sub delete {
     $self->{_db_size} -= @$ids;
 }
 
+
+=item B<lag()>
+
+Measure buffer size in bytes.
+
+=cut
 sub lag {
     my $self = shift;
     my $lag = 0;

@@ -7,6 +7,7 @@ use warnings;
 
 use parent qw(
     Stream::In
+    Stream::In::Role::Lag
 );
 
 use namespace::autoclean;
