@@ -87,20 +87,16 @@ Creates anonymous output stream which calls specified callback on every C<write>
 
 =cut
 sub coro_out {
-    my ($threads, $out) = validate_pos(
-        @_,
-        { type => SCALAR, regex => qr/^\d+$/ },
-        { type => OBJECT },
-    );
-    $out->DOES('Stream::Out') or croak "Expected Stream::Out object, got $out";
+    my ($threads, $callback) = @_;
+    croak "Expected callback" unless ref($callback) eq 'CODE';
 
     return coro_filter($threads => filter(sub {
-        $out->write(@_);
-        return;
-    }, sub {
-        $out->commit();
-        return;
-    })) | code_out(sub{});
+          $callback->()->write(@_);
+          return;
+      }, sub {
+          $callback->()->commit();
+          return;
+      })) | code_out(sub{});
 }
 
 =item B<< memory_storage() >>
