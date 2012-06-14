@@ -83,7 +83,7 @@ sub code_out(&;&) {
 
 =item B<< coro_out($coderef) >>
 
-Creates anonymous output stream which calls specified callback on every C<write> call in coros.
+Creates anonymous output stream which calls specified callback on every C<write> and C<commit> call in coros.
 
 =cut
 sub coro_out {
