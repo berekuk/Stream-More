@@ -78,18 +78,25 @@ sub coro_filter_test :Test(1) {
     ok coro_filter(5 => filter {})->isa('Stream::Filter::Coro');
 }
 
-sub coro_out_test :Test(4) {
+sub coro_out_test :Test(5) {
     my @result;
+    my $commit_calls = 0;
 
-    my $code_out = sub { code_out( sub {
-        my $item = shift;
-        use Coro::AnyEvent;
-        Coro::AnyEvent::sleep(1);
-        push @result, $item;
-        return $item;
-    })};
+    use Coro::AnyEvent;
 
-    my $code_out = sub { return $queue; };
+    my $code_out = sub {
+        code_out(
+            sub {
+                my $item = shift;
+                Coro::AnyEvent::sleep(1);
+                push @result, $item;
+                return $item;
+            },
+            sub {
+                $commit_calls++;
+            }
+        )
+    };
 
     my $coro_out = coro_out(5 => $code_out);
     ok $coro_out->isa('Stream::Out');
@@ -100,6 +107,8 @@ sub coro_out_test :Test(4) {
         array_in([ 1 .. 10])
         => $coro_out
     );
+    $coro_out->commit;
+
     my $end = time;
     cmp_ok $end - $start, '<', 2.5;
     cmp_ok $end - $start, '>', 1.5;
@@ -108,7 +117,7 @@ sub coro_out_test :Test(4) {
     [1 .. 10],
     [ sort { $a <=> $b } @result ];
 
-    $coro_out->commit;
+    cmp_ok $commit_calls, '>', 0;
 }
 
 Test::Class->runtests(
