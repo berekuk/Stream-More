@@ -79,21 +79,24 @@ sub coro_filter_test :Test(1) {
 }
 
 sub coro_out_test :Test(5) {
-    my @result;
-    my $commit_calls = 0;
+    my $id = 0;
+    my %res_hash;
 
     use Coro::AnyEvent;
 
     my $code_out = sub {
-        code_out(
+        my $cur_id = $id++;
+        my @items;
+        return code_out(
             sub {
                 my $item = shift;
                 Coro::AnyEvent::sleep(1);
-                push @result, $item;
+                push @items, $item;
                 return $item;
             },
             sub {
-                $commit_calls++;
+                push @{$res_hash{$cur_id}}, @items;
+                @items = ();
             }
         )
     };
@@ -107,17 +110,23 @@ sub coro_out_test :Test(5) {
         array_in([ 1 .. 10])
         => $coro_out
     );
-    $coro_out->commit;
 
     my $end = time;
     cmp_ok $end - $start, '<', 2.5;
     cmp_ok $end - $start, '>', 1.5;
 
     is_deeply
+    [0..4],
+    [ sort { $a <=> $b } keys %res_hash ];
+
+    my @result;
+    foreach my $key (keys %res_hash) {
+        push @result, @{$res_hash{$key}};
+    }
+
+    is_deeply
     [1 .. 10],
     [ sort { $a <=> $b } @result ];
-
-    cmp_ok $commit_calls, '>', 0;
 }
 
 Test::Class->runtests(

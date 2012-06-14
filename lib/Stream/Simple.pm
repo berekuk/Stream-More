@@ -90,13 +90,16 @@ sub coro_out {
     my ($threads, $callback) = @_;
     croak "Expected callback" unless ref($callback) eq 'CODE';
 
-    return coro_filter($threads => sub { filter(sub {
-          $callback->()->write(@_);
-          return;
-      }
-      , sub {
-          $callback->()->commit();
-      })}) | code_out(sub{});
+    return coro_filter($threads => sub {
+        my $out = $callback->();
+        filter(sub {
+            $out->write(@_);
+            return;
+        }
+        , sub {
+            $out->commit();
+        })
+    }) | code_out(sub{});
 }
 
 =item B<< memory_storage() >>
