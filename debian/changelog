@@ -1,3 +1,9 @@
+libstream-more-perl (0.11.5) unstable; urgency=low
+
+  * Stram::Filter::Coro->write made blocking
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Fri, 15 Jun 2012 16:49:42 +0400
+
 libstream-more-perl (0.11.4) unstable; urgency=low
 
   * add coro_out function that writes into output stream in coros

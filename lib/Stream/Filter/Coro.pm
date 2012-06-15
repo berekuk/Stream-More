@@ -38,12 +38,12 @@ has 'filter' => (
 sub BUILD {
     my $self = shift;
     require Coro;
+    require Coro::Channel;
     if (blessed $self->filter) {
         warn "Passing filter object to Stream::Filter::Coro is deprecated, use sub { ... } instead";
         my $filter = $self->filter;
         $self->filter(sub { $filter });
     }
-    $self->_coros;
 }
 
 has '_coros' => (
@@ -55,7 +55,7 @@ has '_in_channel' => (
     is => 'ro',
     lazy => 1,
     default => sub {
-        Coro::Channel->new; # TODO - maxsize?
+        Coro::Channel->new(1);
     },
     clearer => '_clear_in',
 );
@@ -124,6 +124,7 @@ sub _read_all {
 sub write {
     my $self = shift;
     my ($item) = @_; # TODO - support additional parameters somehow?
+    $self->_coros; # force coros reconstruction after commit
     $self->_in_channel->put({ action => 'write', item => $item });
     Coro::cede();
     return $self->_read_all;
