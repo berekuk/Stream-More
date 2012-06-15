@@ -67,7 +67,7 @@ sub multiple_commits :Tests {
     );
 
     my @result;
-    for my $data ([ 1 .. 10 ], [ 11 .. 20 ]) {
+    for my $data ([ 1 .. 10 ], [ 11 .. 20 ], []) {
         process(array_in($data) => $coro_filter | code_out { push @result, shift })
     }
     is scalar @result, 20;

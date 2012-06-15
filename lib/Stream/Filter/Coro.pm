@@ -132,6 +132,8 @@ sub write {
 
 sub commit {
     my $self = shift;
+    return unless $self->_has_coros;
+
     $self->_in_channel->put({ action => 'commit' }) for 1 .. $self->threads;
     $_->join for @{ $self->_coros };
     my @result = $self->_read_all;
