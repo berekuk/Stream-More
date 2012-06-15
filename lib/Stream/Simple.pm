@@ -81,9 +81,9 @@ sub code_out(&;&) {
     return Stream::Simple::CodeOut->new($callback, $commit_callback);
 }
 
-=item B<< coro_out($coderef) >>
+=item B<< coro_out($threads => $coderef) >>
 
-Creates anonymous output stream which calls specified callback on every C<write> and C<commit> call in coros.
+Creates anonymous output stream for each thread returned by $coderef and calls it's C<write> and C<commit> methods.
 
 =cut
 sub coro_out {
