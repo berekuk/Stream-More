@@ -1,3 +1,9 @@
+libstream-more-perl (0.11.7) unstable; urgency=low
+
+  * fixed unlink/lockf race in Buffer::SQLite + stress test
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Wed, 20 Jun 2012 15:04:29 +0400
+
 libstream-more-perl (0.11.6) unstable; urgency=low
 
   * fix coro_filter empty commit hanging

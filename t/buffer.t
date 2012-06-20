@@ -186,4 +186,25 @@ sub commit :Tests {
     like(exception { $mq->commit([42]) }, qr/unknown id/);
 }
 
+sub unlink_lockf_race :Tests {
+    for (1..5) {
+        xfork and next;
+        my $in = array_in(["a" .. "z"]);
+        eval {
+            for (0..100) {
+                my $mq = Stream::In::Buffer->new($in, { dir => "tfiles/" });
+            }
+        };
+        if ($@) {
+            warn $@;
+            exit(1);
+        }
+        exit;
+    }
+    while () {
+        last if wait == -1;
+        is($?, 0);
+    }
+}
+
 __PACKAGE__->new->runtests;

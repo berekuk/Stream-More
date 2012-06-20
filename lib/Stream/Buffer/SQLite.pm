@@ -56,6 +56,23 @@ Maximum number of SQLite databases to create. 100 by default. Multiple databases
 
 my $counter = 0;
 
+sub _lockf {
+    my ($file, $opts) = @_;
+    while () {
+        my $lockf = lockf($file, $opts);
+        return $lockf unless $lockf;
+        unless (-e $file) {
+            DEBUG "$file: locked but removed";
+            next;
+        }
+        unless ((stat $lockf->{_fh})[1] eq (stat $file)[1]) {
+            DEBUG "$file: locked but removed and created back";
+            next;
+        }
+        return $lockf;
+    }
+}
+
 sub new {
     my $class = shift;
     my $self = validate(@_, { 
@@ -74,7 +91,7 @@ sub DESTROY {
     local $@;
     my $self = shift;
     $self->{_dbh}->rollback() if $self->{_dbh};
-    unlink $self->{_db_file} if $self->{_db_file} and $self->{_db_size} == 0;
+    unlink $self->{_db_file} if $self->{_db_file} and defined $self->{_db_size} and $self->{_db_size} == 0;
 }
 
 sub _find_buffer {
@@ -84,8 +101,9 @@ sub _find_buffer {
     $self->{_chunk_count} = scalar(@files);
 
     for my $file (@files) {
-        my $lockf = lockf($file, { blocking => 0 });
+        my $lockf = _lockf($file, { blocking => 0 });
         next unless $lockf;
+        DEBUG "$file: found and locked";
         return ($lockf, $file);
     }
     
@@ -99,9 +117,16 @@ sub _create_buffer {
 
     unless ($file) {
         die "Chunk limit exceeded: $self->{dir}" if $self->{max_chunk_count} and $self->{_chunk_count} >= $self->{max_chunk_count};
-        $file = "$self->{dir}/" . time . ".$$." . $counter++ . ".sqlite";
-        $lockf = lockf($file, { blocking => 0 });
-        die "failed to lock: $file" unless $lockf; # mystery - failed to lockf a unique filename
+        while () {
+            $file = "$self->{dir}/" . time . ".$$." . $counter++ . ".sqlite";
+            $lockf = _lockf($file, { blocking => 0 });
+            unless ($lockf) { # newly created file was locked by someone else
+                DEBUG "$file: created but stolen";
+                next;
+            }
+            DEBUG "$file: created and locked";
+            last;
+        }
     }
 
     $self->{_lockf} = $lockf;
@@ -112,7 +137,7 @@ sub _create_buffer {
     $self->{_buffer} = $self->{_dbh}->selectall_arrayref(qq{
         select id, data from buffer order by id
     });
-    $self->{_dbh}->commit; # commit after select, yep
+    $self->{_dbh}->commit(); # commit after select, yep
 
     $self->{_id} = $self->{_buffer}->[-1]->[0] + 1 if @{$self->{_buffer}};
     $self->{_id} ||= 0;
@@ -134,7 +159,7 @@ sub _init_db {
 sub _get_version {
     my ($self, $dbh) = @_;
     my $version = 0;
-    eval { ($version) = $dbh->selectrow_array("select version from version") };
+    eval { ($version) = $dbh->selectrow_array("select version from version"); };
     die if $@ and $@ !~ /no such table/;
     return $version;
 }
@@ -190,7 +215,7 @@ sub save {
 
     }
 
-    $self->{_dbh}->commit; # fsync?
+    $self->{_dbh}->commit(); # fsync?
 
     $self->{_db_size} += @$chunk;
     return $result;
@@ -220,12 +245,12 @@ sub load {
             my $buffer = $dbh->selectcol_arrayref(qq{
                 select data from buffer
             });
-            $dbh->commit;
+            $dbh->commit();
 
             push @$result, @{ $self->save($buffer, $limit - @$result) };
 
             undef $dbh;
-            unlink $file or die "unlink failed: $!";
+            unlink $file or die "$file: unlink failed: $!";
             
         } else {
             
@@ -258,7 +283,7 @@ sub delete {
             die "commit: unknown id: $id";
         }
     }
-    $self->{_dbh}->commit;
+    $self->{_dbh}->commit();
     $self->{_db_size} -= @$ids;
 }
 
