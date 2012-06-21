@@ -108,6 +108,26 @@ sub _mkdir_unless_exists {
     }
 }
 
+sub _init_data {
+    my $self = shift;
+
+    my $dir = $self->dir;
+    return if -e "$dir/data";
+    my $lock = $self->_lock;
+    return if -e "$dir/data";
+
+    open my $fh, '>', "$dir/data.new";
+    my $count = $self->data_size;
+
+    while ($count >= 1024) {
+        print {$fh} "\n" x 1024;
+        $count -= 1024;
+    }
+    print {$fh} "\n" while $count-- > 0;
+    close $fh;
+    rename "$dir/data.new" => "$dir/data";
+}
+
 =back
 
 =head1 METHODS
@@ -122,23 +142,9 @@ sub BUILD {
     my $dir = $self->dir;
 
     $self->_mkdir_unless_exists($dir);
-
-    my $lock;
     $self->_mkdir_unless_exists("$dir/clients");
+    $self->_init_data;
 
-    unless (-e "$dir/data") {
-        $lock ||= $self->_lock;
-        open my $fh, '>', "$dir/data.new";
-        my $count = $self->data_size;
-
-        while ($count >= 1024) {
-            print {$fh} "\n" x 1024;
-            $count -= 1024;
-        }
-        print {$fh} "\n" while $count-- > 0;
-        close $fh;
-        rename "$dir/data.new" => "$dir/data";
-    }
     if (int(-s "$dir/data") != $self->data_size) {
         die "Invalid data_size ".$self->data_size.", file has size ".(-s "$dir/data");
     }
