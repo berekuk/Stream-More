@@ -17,6 +17,8 @@ use Stream::Simple qw( array_in code_out );
 use Streams qw( process );
 use PPB::Test::TFiles;
 use PPB::Progress;
+use Yandex::X qw(xfork xprint xopen xqx);
+use Yandex::Logger;
 
 use Perl6::Slurp;
 use List::Util qw(min);
@@ -215,6 +217,42 @@ sub buffer_size_disable :Tests {
     is($storage->in("main")->read, undef, 'implicit commit disabled');
     $storage->commit;
     is($storage->in("main")->read, "x\n", 'explicit commit ok');
+}
+
+sub race :Tests {
+
+    Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => 1000)->stream("main"); # races on storage and clients creation :(
+
+    for (1..5) {
+        xfork and next;
+        eval {
+            my $time = time;
+            my $in = Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => 1000)->stream("main");
+            my $out = xopen(">", "tfiles/out.$_");
+            while () {
+                last if time >= $time + 2;
+                my $line = $in->read;
+                next unless $line;
+                xprint($out, $line);     
+            }
+        };
+        if ($@) {
+            WARN $@;
+            exit 1;
+        }
+        exit 0;
+    }
+    sleep 1;
+    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => 1000);
+    $storage->write("1\n");
+    $storage->commit;
+
+    while () {
+        last if wait == -1;
+        is($?, 0, "exit code");
+    }
+    is(xqx("cat tfiles/out.*"), "1\n", "no dups");
+
 }
 
 {
