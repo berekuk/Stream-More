@@ -7,6 +7,7 @@ use lib 'lib';
 
 use Test::More;
 use Test::Fatal;
+use Test::Deep;
 use parent qw(Test::Class);
 
 use namespace::autoclean;
@@ -19,6 +20,7 @@ use PPB::Test::TFiles;
 use PPB::Progress;
 use Yandex::X qw(xfork xprint xopen xqx);
 use Yandex::Logger;
+use Time::HiRes qw( sleep time );
 
 use Perl6::Slurp;
 use List::Util qw(min);
@@ -240,17 +242,23 @@ sub race :Tests {
         }
         exit 0;
     }
-    sleep 1;
+
+    my $t = Time::HiRes::time;
     my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => 1000);
-    $storage->write("1\n");
-    $storage->commit;
+    for (1..100) {
+        $storage->write("$_\n");
+        $storage->commit;
+        sleep 0.01;
+    }
+
+    diag("time spent: ", Time::HiRes::time - $t);
 
     while () {
         last if wait == -1;
         is($?, 0, "exit code");
     }
-    is(xqx("cat tfiles/out.*"), "1\n", "no dups");
-
+    my @lines = sort { $a <=> $b } split /\n/, xqx("cat tfiles/out.*");
+    cmp_deeply(\@lines, [1..100], "no dups");
 }
 
 {
