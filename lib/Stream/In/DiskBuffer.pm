@@ -87,7 +87,8 @@ sub new {
 
     unless (-d $dir) {
         $self->_check_ro();
-        xmkdir($dir);
+        mkdir($dir);
+        die "mkdir failed: $!" unless -d $dir;
     }
 
     unless ($self->{read_only}) {

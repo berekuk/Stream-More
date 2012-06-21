@@ -99,6 +99,15 @@ has 'buffer_size' => (
     },
 );
 
+sub _mkdir_unless_exists {
+    my $self = shift;
+    my ($dir) = @_;
+    return if -d $dir;
+    unless (mkdir $dir) {
+        die "mkdir failed: $!" unless -d $dir;
+    }
+}
+
 =back
 
 =head1 METHODS
@@ -112,17 +121,14 @@ sub BUILD {
     my $self = shift;
     my $dir = $self->dir;
 
-    unless (-d $dir) {
-        mkdir $dir;
-    }
+    $self->_mkdir_unless_exists($dir);
+
     my $lock;
-    unless (-d "$dir/clients") {
-        $lock ||= $self->_lock;
-        mkdir "$dir/clients";
-    }
+    $self->_mkdir_unless_exists("$dir/clients");
+
     unless (-e "$dir/data") {
         $lock ||= $self->_lock;
-        open my $fh, '>', "$dir/data";
+        open my $fh, '>', "$dir/data.new";
         my $count = $self->data_size;
 
         while ($count >= 1024) {
@@ -131,6 +137,7 @@ sub BUILD {
         }
         print {$fh} "\n" while $count-- > 0;
         close $fh;
+        rename "$dir/data.new" => "$dir/data";
     }
     if (int(-s "$dir/data") != $self->data_size) {
         die "Invalid data_size ".$self->data_size.", file has size ".(-s "$dir/data");
@@ -256,14 +263,15 @@ sub register_client {
     my ($name) = pos_validated_list(\@_, { isa => ClientName });
     $self->check_read_only();
 
-    if ($self->has_client($name)) {
-        return; # already registered
-    }
+    # check if already registered
+    # we check first without locking the whole storage because auto-registering may be enabled, and lock can be undesirable
+    # (or maybe this is a premature optimization)
+    return if $self->has_client($name);
 
     my $lock = $self->_lock; # in case initial 'data' generation happens right now
 
     INFO "Registering $name at ".$self->dir;
-    mkdir($self->dir."/clients/$name");
+    $self->_mkdir_unless_exists($self->dir."/clients/$name");
     $self->in($name)->in->commit; # create client state
 }
 

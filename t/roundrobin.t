@@ -221,8 +221,6 @@ sub buffer_size_disable :Tests {
 
 sub race :Tests {
 
-    Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => 1000)->stream("main"); # races on storage and clients creation :(
-
     for (1..5) {
         xfork and next;
         eval {
