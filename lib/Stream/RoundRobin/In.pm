@@ -143,6 +143,7 @@ sub read_chunk {
     $self->position($cur);
 
     unless (@buffer) {
+        $self->clear_position;
         $self->clear_lock; # since we read nothing, this is safe
         return;
     }
