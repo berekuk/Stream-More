@@ -7,6 +7,7 @@ use lib 'lib';
 
 use Test::More;
 use Test::Fatal;
+use Test::Deep;
 use parent qw(Test::Class);
 
 use namespace::autoclean;
@@ -17,6 +18,9 @@ use Stream::Simple qw( array_in code_out );
 use Streams qw( process );
 use PPB::Test::TFiles;
 use PPB::Progress;
+use Yandex::X qw(xfork xprint xopen xqx);
+use Yandex::Logger;
+use Time::HiRes qw( sleep time );
 
 use Perl6::Slurp;
 use List::Util qw(min);
@@ -215,6 +219,52 @@ sub buffer_size_disable :Tests {
     is($storage->in("main")->read, undef, 'implicit commit disabled');
     $storage->commit;
     is($storage->in("main")->read, "x\n", 'explicit commit ok');
+}
+
+sub race :Tests {
+
+    my $lines = $ENV{RACE_LINES} || 100;
+    my $get_storage = sub {
+        Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => $lines * 10)
+    };
+
+    for (1..5) {
+        xfork and next;
+        eval {
+            my $time = time;
+            my $in = $get_storage->()->in("main");
+            my $out = xopen(">", "tfiles/out.$_");
+            while () {
+                last if time >= $time + 2;
+                my $line = $in->read;
+                next unless $line;
+                xprint($out, $line);     
+            }
+            $in->commit;
+        };
+        if ($@) {
+            WARN $@;
+            exit 1;
+        }
+        exit 0;
+    }
+
+    my $t = Time::HiRes::time;
+    my $storage = $get_storage->();
+    for (1 .. $lines) {
+        $storage->write("$_\n");
+        $storage->commit;
+        sleep 1 / $lines;
+    }
+
+    diag("time spent: ", Time::HiRes::time - $t);
+
+    while () {
+        last if wait == -1;
+        is($?, 0, "exit code");
+    }
+    my @lines = sort { $a <=> $b } split /\n/, xqx("cat tfiles/out.*");
+    cmp_deeply(\@lines, [1 .. $lines], "no dups");
 }
 
 {

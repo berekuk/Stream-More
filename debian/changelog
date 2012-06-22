@@ -1,3 +1,9 @@
+libstream-more-perl (0.11.8) unstable; urgency=low
+
+  * fix duplicate reads from RoundRobin
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Thu, 21 Jun 2012 21:16:30 +0400
+
 libstream-more-perl (0.11.7) unstable; urgency=low
 
   * fixed unlink/lockf race in Buffer::SQLite + stress test

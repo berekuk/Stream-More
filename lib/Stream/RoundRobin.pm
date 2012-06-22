@@ -99,6 +99,38 @@ has 'buffer_size' => (
     },
 );
 
+sub _mkdir_unless_exists {
+    my $self = shift;
+    my ($dir) = @_;
+    return if -d $dir;
+    {
+        no autodie;
+        unless (mkdir $dir) {
+            die "mkdir failed: $!" unless -d $dir;
+        }
+    }
+}
+
+sub _init_data {
+    my $self = shift;
+
+    my $dir = $self->dir;
+    return if -e "$dir/data";
+    my $lock = $self->_lock;
+    return if -e "$dir/data";
+
+    open my $fh, '>', "$dir/data.new";
+    my $count = $self->data_size;
+
+    while ($count >= 1024) {
+        print {$fh} "\n" x 1024;
+        $count -= 1024;
+    }
+    print {$fh} "\n" while $count-- > 0;
+    close $fh;
+    rename "$dir/data.new" => "$dir/data";
+}
+
 =back
 
 =head1 METHODS
@@ -112,26 +144,10 @@ sub BUILD {
     my $self = shift;
     my $dir = $self->dir;
 
-    unless (-d $dir) {
-        mkdir $dir;
-    }
-    my $lock;
-    unless (-d "$dir/clients") {
-        $lock ||= $self->_lock;
-        mkdir "$dir/clients";
-    }
-    unless (-e "$dir/data") {
-        $lock ||= $self->_lock;
-        open my $fh, '>', "$dir/data";
-        my $count = $self->data_size;
+    $self->_mkdir_unless_exists($dir);
+    $self->_mkdir_unless_exists("$dir/clients");
+    $self->_init_data;
 
-        while ($count >= 1024) {
-            print {$fh} "\n" x 1024;
-            $count -= 1024;
-        }
-        print {$fh} "\n" while $count-- > 0;
-        close $fh;
-    }
     if (int(-s "$dir/data") != $self->data_size) {
         die "Invalid data_size ".$self->data_size.", file has size ".(-s "$dir/data");
     }
@@ -256,14 +272,15 @@ sub register_client {
     my ($name) = pos_validated_list(\@_, { isa => ClientName });
     $self->check_read_only();
 
-    if ($self->has_client($name)) {
-        return; # already registered
-    }
+    # check if already registered
+    # we check first without locking the whole storage because auto-registering may be enabled, and lock can be undesirable
+    # (or maybe this is a premature optimization)
+    return if $self->has_client($name);
 
     my $lock = $self->_lock; # in case initial 'data' generation happens right now
 
     INFO "Registering $name at ".$self->dir;
-    mkdir($self->dir."/clients/$name");
+    $self->_mkdir_unless_exists($self->dir."/clients/$name");
     $self->in($name)->in->commit; # create client state
 }
 
