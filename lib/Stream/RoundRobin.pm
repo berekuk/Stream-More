@@ -103,8 +103,11 @@ sub _mkdir_unless_exists {
     my $self = shift;
     my ($dir) = @_;
     return if -d $dir;
-    unless (mkdir $dir) {
-        die "mkdir failed: $!" unless -d $dir;
+    {
+        no autodie;
+        unless (mkdir $dir) {
+            die "mkdir failed: $!" unless -d $dir;
+        }
     }
 }
 
