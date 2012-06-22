@@ -223,11 +223,16 @@ sub buffer_size_disable :Tests {
 
 sub race :Tests {
 
+    my $lines = $ENV{RACE_LINES} || 100;
+    my $get_storage = sub {
+        Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => $lines * 10)
+    };
+
     for (1..5) {
         xfork and next;
         eval {
             my $time = time;
-            my $in = Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => 1000)->stream("main");
+            my $in = $get_storage->()->in("main");
             my $out = xopen(">", "tfiles/out.$_");
             while () {
                 last if time >= $time + 2;
@@ -235,6 +240,7 @@ sub race :Tests {
                 next unless $line;
                 xprint($out, $line);     
             }
+            $in->commit;
         };
         if ($@) {
             WARN $@;
@@ -244,11 +250,11 @@ sub race :Tests {
     }
 
     my $t = Time::HiRes::time;
-    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => 1000);
-    for (1..100) {
+    my $storage = $get_storage->();
+    for (1 .. $lines) {
         $storage->write("$_\n");
         $storage->commit;
-        sleep 0.01;
+        sleep 1 / $lines;
     }
 
     diag("time spent: ", Time::HiRes::time - $t);
@@ -258,7 +264,7 @@ sub race :Tests {
         is($?, 0, "exit code");
     }
     my @lines = sort { $a <=> $b } split /\n/, xqx("cat tfiles/out.*");
-    cmp_deeply(\@lines, [1..100], "no dups");
+    cmp_deeply(\@lines, [1 .. $lines], "no dups");
 }
 
 {
