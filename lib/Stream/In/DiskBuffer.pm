@@ -30,7 +30,7 @@ use Scalar::Util qw(blessed);
 
 Some storages don't support parallel reading using one client name.
 
-This class solves this problem by caching small backlog in multiple on-disk files, allowing to read them in parallel.
+This class solves this problem by caching small backlog in multiple on-disk files, allowing them to be processed in parallel.
 
 =head1 METHODS
 
@@ -44,7 +44,7 @@ Constructor.
 
 C<$in> can be L<Stream::In> object or coderef which returns L<Stream::In> object.
 
-Second variant is useful if underlying input stream caches stream position; in this case, it's necessary to recreate input stream every time when diskbuffer caches new portion of data, so that every item is read from underlying stream only once. For example, you definitely should write C<< Stream::In::DiskBuffer->new(sub { Stream::Log->new(...) }, $dir) >> and not C<< Stream::In::DiskBuffer->new(Stream::Log->new(...), $dir) >>.
+Second variant is useful if underlying input stream caches stream position; in this case, it's necessary to recreate input stream every time when diskbuffer caches new portion of data, so that every item is read from underlying stream only once. For example, you definitely should write C<< Stream::In::DiskBuffer->new(sub { Stream::Log::In->new(...) }, $dir) >> and not C<< Stream::In::DiskBuffer->new(Stream::Log::In->new(...), $dir) >>.
 
 C<$dir> is a path to local dir. It will be created automatically if at least its parent dir exists (you should have appropriate rights to do this, of course).
 
