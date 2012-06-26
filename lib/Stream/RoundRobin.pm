@@ -267,6 +267,12 @@ sub client_names {
     return @client_names;
 }
 
+sub has_client {
+    my $self = shift;
+    my ($name) = @_;
+    return -d $self->dir."/clients/$name";
+}
+
 sub register_client {
     my $self = shift;
     my ($name) = pos_validated_list(\@_, { isa => ClientName });
