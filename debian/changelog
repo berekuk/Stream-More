@@ -1,3 +1,10 @@
+libstream-more-perl (0.12.0) unstable; urgency=low
+
+  * take read lock in DiskBuffer by default
+    (Queue and RoundRobin disable this option for the sake of performance)
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 26 Jun 2012 15:32:02 +0400
+
 libstream-more-perl (0.11.8) unstable; urgency=low
 
   * RoundRobin improvements:

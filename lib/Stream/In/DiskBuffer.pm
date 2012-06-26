@@ -15,7 +15,7 @@ use Params::Validate qw(:all);
 
 use Carp;
 use Yandex::Logger;
-use Yandex::Lockf;
+use Yandex::Lockf 3.0;
 use Yandex::Persistent;
 use Yandex::X;
 use Stream::In::DiskBuffer::Chunk;
@@ -60,6 +60,12 @@ Buffer chunks format. Default is C<storable>.
 
 Period in seconds to run garbage collecting.
 
+=item I<read_lock>
+
+Take a short read lock while reading data from the underlying input stream.
+
+This option is true by default. You can turn it off if you're sure that your input stream is locking itself. (It usually should lock on read and then unlock on commit to cooperate correctly with diskbuffer.)
+
 =back
 
 =cut
@@ -68,9 +74,10 @@ sub new {
     my ($in, $dir, @options) = validate_pos(@_, { type => CODEREF | OBJECT }, { type => SCALAR }, { type => HASHREF, optional => 1 });
 
     my $self = validate(@options, {
-        format => { default => 'storable' },
-        gc_period => { default => 300 },
-        read_only => { default => 0 },
+        format => { default => 'storable', type => SCALAR },
+        gc_period => { default => 300, type => SCALAR, regex => qr/^\d+$/ },
+        read_only => { default => 0, type => BOOLEAN },
+        read_lock => { default => 1, type => BOOLEAN },
     });
     $self->{dir} = $dir;
 
@@ -139,10 +146,15 @@ sub _new_chunk {
     $self->_check_ro();
     my $chunk_size = $self->{uncommited} + 1;
 
+    my $read_lock;
+    $read_lock = lockf("$self->{dir}/read_lock") if $self->{read_lock};
+
     my $in = $self->in;
+
     my $data = $in->read_chunk($chunk_size);
     return unless $data;
     return unless @$data;
+
     my $new_id = $self->_next_id;
     Stream::In::DiskBuffer::Chunk->new($self->{dir}, $new_id, $data, { format => $self->{format} });
     $in->commit;
@@ -309,6 +321,7 @@ sub gc {
         next if $file eq '.';
         next if $file eq '..';
         next if $file =~ /^meta/;
+        next if $file =~ /^read_lock$/;
         next if $file =~ /^\d+\.chunk$/;
         my $unlink = sub {
             xunlink("$self->{dir}/$file");

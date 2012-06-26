@@ -325,6 +325,7 @@ sub in {
             {
                 read_only => $self->read_only,
                 format => 'plain',
+                read_lock => 0, # RoundRobin::In locks itself
             }
         );
     }
