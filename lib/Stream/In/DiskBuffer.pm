@@ -141,6 +141,18 @@ sub _chunk2id {
     return $id;
 }
 
+sub _chunk {
+    my $self = shift;
+    my ($id, $overrides) = @_;
+    my $chunk = Stream::In::DiskBuffer::Chunk->new(
+        dir => $self->{dir},
+        id => $id,
+        format => $self->{format},
+        read_only => $self->{read_only},
+        ($overrides ? %$overrides : ()),
+    );
+}
+
 sub _new_chunk {
     my $self = shift;
     $self->_check_ro();
@@ -156,7 +168,8 @@ sub _new_chunk {
     return unless @$data;
 
     my $new_id = $self->_next_id;
-    Stream::In::DiskBuffer::Chunk->new($self->{dir}, $new_id, $data, { format => $self->{format} });
+    my $chunk = $self->_chunk($new_id);
+    $chunk->create($data);
     $in->commit;
 
     return $new_id;
@@ -168,7 +181,9 @@ sub _load_chunk {
 
     # this line can create lock file for already removed chunk, which will be removed only at next gc()
     # TODO - think how we can fix it
-    return Stream::In::DiskBuffer::Chunk->load($self->{dir}, $id, { read_only => $self->{read_only}, format => $self->{format}, %$overrides });
+    my $chunk = $self->_chunk($id, $overrides);
+    $chunk->load or return;
+    return $chunk;
 }
 
 sub _next_chunk {
@@ -328,14 +343,12 @@ sub gc {
         };
 
         if (my ($id) = $file =~ /^(\d+)\.(?: lock | status | status\.lock )$/x) {
-            unless (-e "$self->{dir}/$id.chunk") {
-                $unlink->();
-                DEBUG "Lost file $file removed";
-            }
+            my $chunk = $self->_chunk($id);
+            $chunk->cleanup;
             next;
         }
 
-        if ($file =~ /^(\d+)\.chunk.new$/ or $file =~ /^yandex\.tmp\./) {
+        if ($file =~ /^(\d+)\.chunk\.new$/ or $file =~ /^yandex\.tmp\./) {
             my $age = time - (stat($file))[10];
             unless ($age < 600) {
                 $unlink->();

@@ -145,10 +145,18 @@ sub gc_race :Tests {
                 sub { $file->stream(Stream::File::Cursor->new('tfiles/cursor')) },
                 'tfiles/buffer'
             );
+            my $i = 0;
             while () {
+                $i++;
+
                 $buffered_in->gc if rand() < 5 * $WORKERS / $LINES; # call gc 5 times per worker on average
-                last if time >= $time + 5; # should be enough for everyone
+
+                $buffered_in->lag if rand() < 5 * $WORKERS / $LINES; # call lag 5 times per worker on average
+                #  lag is prone to race contitions too, let's check whether it fails
+
+                last if time >= $time + 10; # should be enough for everyone
                 my $line = $buffered_in->read;
+
 
                 # busy-waiting
                 # otherwise it's too probable that one worker will block everyone else and then read everything himself
