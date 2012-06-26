@@ -322,7 +322,7 @@ sub gc {
             next;
         }
 
-        if ($file =~ /^(\d+)\.chunk.new$/) {
+        if ($file =~ /^(\d+)\.chunk.new$/ or $file =~ /^yandex\.tmp\./) {
             my $age = time - (stat($file))[10];
             unless ($age < 600) {
                 $unlink->();
