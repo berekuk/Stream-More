@@ -134,6 +134,8 @@ sub stress :Test {
     my $id = 0;
     my $progress = PPB::Progress->new(max => scalar @data);
 
+    my @c = map { $storage->in("client$_") } (0..9);
+
     while (1) {
         my $success;
         try {
@@ -154,7 +156,7 @@ sub stress :Test {
             }
         };
         for (0 .. 9) {
-            $success += process($storage->in("client$_") => $outs[$_], { limit => 1 + int rand 100, chunk_size => 10 });
+            $success += process($c[$_] => $outs[$_], { limit => 1 + int rand 100, chunk_size => 10 });
         }
 
         # tmp intermediate check
