@@ -2,14 +2,13 @@ package Stream::In::DiskBuffer::Chunk;
 
 # ABSTRACT: represents one disk buffer chunk
 
-use strict;
-use warnings;
-
 use namespace::autoclean;
-use parent qw(
-    Stream::In
-    Stream::In::Role::Lag
-);
+use Moose;
+with
+    'Stream::Moose::In',
+    'Stream::Moose::In::Lag',
+;
+use autodie qw(rename);
 
 =head1 METHODS
 
@@ -17,44 +16,100 @@ use parent qw(
 
 =cut
 
-use Yandex::X;
 use Yandex::Logger;
 use Yandex::Lockf 3.0.0;
 use Stream::Formatter::LinedStorable;
 use Stream::Formatter::JSON;
 use Stream::File::Cursor;
-use Stream::File 0.9.4; # from this version, Stream::File::In implements 'lag'
+use Stream::File;
 use Params::Validate qw(:all);
-use Carp;
+use Try::Tiny;
+
+# internal function
+sub _unlink {
+    my ($file) = @_;
+    return unless -e $file;
+    unlink $file; # no autodie for unlink
+    die "unlink $file failed: $!" if -e $file;
+}
+
+
+has 'dir' => (
+    is => 'ro',
+    isa => 'Str',
+    required => 1,
+);
+
+has 'id' => (
+    is => 'ro',
+    isa => 'Int',
+    required => 1,
+);
+
+has 'read_only' => (
+    is => 'ro',
+    isa => 'Bool',
+    default => 0,
+);
 
 #FIXME: move formatters to catalog!
 my %format2wrapper = (
     json => Stream::Formatter::JSON->new,
     storable => Stream::Formatter::LinedStorable->new,
-    plain => undef,
+);
+has 'format' => (
+    is => 'ro',
+    isa => 'Str', # FIXME - Stream::Formatter? coerce?
+);
+has 'format_obj' => (
+    is => 'ro',
+    lazy => 1,
+    default => sub {
+        my $self = shift;
+        my $format = $self->format;
+        return unless $format;
+        return if $format eq 'plain';
+        my $obj = $format2wrapper{$format};
+        confess "Unknown format '$format'" unless $obj;
+        return $obj;
+    },
 );
 
-sub new {
-    my ($class, $dir, $id, $data, @opts) = validate_pos(@_, 1, { type => SCALAR }, { type => SCALAR, regex => qr/^\d+$/ }, { type => ARRAYREF }, { type => HASHREF, optional => 1 });
-    my $opts = validate(@opts, {
-        format => { default => 'storable' },
-    });
+has '_lock' => (
+    is => 'rw', # init lazily, once, in load()
+);
+has '_in' => (
+    is => 'rw', # init lazily, once, in load()
+);
 
-    my $file = "$dir/$id.chunk";
-    my $wrapper = $format2wrapper{$opts->{format}};
+sub _prefix {
+    my $self = shift;
+    return $self->dir.'/'.$self->id;
+}
 
+sub create {
+    my $self = shift;
+    my ($data) = validate_pos(@_, { type => ARRAYREF });
+
+    my $file = $self->_prefix.".chunk";
     my $new_file = "$file.new";
+
+    if ($self->_in) {
+        die "Can't recreate chunk, $self is already initialized";
+    }
+    if (-e $file) {
+        die "Can't recreate chunk, $file already exists";
+    }
     if (-e $new_file) {
         WARN "removing unexpected temporary file $new_file";
-        xunlink($new_file);
+        _unlink($new_file);
     }
     my $storage = Stream::File->new($new_file);
-    $storage = $wrapper->wrap($storage) if $wrapper;
+    $storage = $self->format_obj->wrap($storage) if $self->format_obj;
     $storage->write_chunk($data);
     $storage->commit;
-    xrename($new_file => $file);
 
-    return $class->load($dir, $id, $opts);
+    rename $new_file => $file; # autodie takes care of errors
 }
 
 =item B<< load($dir, $id) >>
@@ -63,70 +118,79 @@ Construct chunk object corresponding to existing chunk.
 
 =cut
 sub load {
-    my ($class, $dir, $id, @opts) = validate_pos(@_, 1, { type => SCALAR }, { type => SCALAR, regex => qr/^\d+$/ }, { optional => 1, type => HASHREF });
-    my $opts = validate(@opts, {
-        read_only => { default => 0 },
-        format => { default => 'storable' },
-    });
+    my $self = shift;
 
-    return unless -e "$dir/$id.chunk"; # this check is unnecessary, but it reduces number of fanthom lock files
+    return 1 if $self->_in; # already loaded
+
+    my $prefix = $self->_prefix;
+    my $file = "$prefix.chunk";
+    return unless -e $file; # this check is unnecessary, but it reduces number of fanthom lock files
     my $lock;
-    unless ($opts->{read_only}) { 
-        $lock = lockf("$dir/$id.lock", { blocking => 0 }) or return;
+    unless ($self->read_only) {
+        $lock = lockf("$prefix.lock", { blocking => 0 }) or return;
     };
-    return unless -e "$dir/$id.chunk";
+    $self->_lock($lock);
+    return unless -e $file;
 
-    my $wrapper = $format2wrapper{$opts->{format}};
-    my $storage = Stream::File->new("$dir/$id.chunk");
-    $storage = $wrapper->wrap($storage) if $wrapper;
+    # it's still possible that file will disappear (if we're in r/o mode and didn't acquire the lock)
+    my $storage = Stream::File->new($file);
+    $storage = $self->format_obj->wrap($storage) if $self->format_obj;
 
-    my $new = $opts->{read_only} ? "new_ro" : "new";
-    my $in = $storage->stream(Stream::File::Cursor->$new("$dir/$id.status"));
-    
-    return bless {
-        in => $in,
-        read_only => $opts->{read_only},
-        lock => $lock,
-        id => $id,
-        dir => $dir,
-    } => $class;
+    my $new = $self->read_only ? "new_ro" : "new";
+
+    my $in;
+    try {
+        $in = $storage->in(Stream::File::Cursor->$new("$prefix.status"));
+    }
+    catch {
+        if (-e $file) {
+            die $_;
+        }
+        elsif ($lock) {
+            die "Internal error: failed to create $file but lock is acquired";
+        }
+    };
+    return unless $in; # probably disappeared
+
+    $self->_in($in);
+    return 1; # ok, loaded
 }
 
 sub _check_ro {
     my $self = shift;
-    $Carp::CarpLevel = 1;
-    croak "Stream is read only" if $self->{read_only};
+    confess "Stream is read only" if $self->read_only;
 }
 
 sub read {
     my $self = shift;
-    return $self->{in}->read;
+    return $self->_in->read;
 }
 
 sub read_chunk {
     my $self = shift;
-    return $self->{in}->read_chunk(@_);
+    return $self->_in->read_chunk(@_);
 }
 
 sub commit {
     my $self = shift;
     $self->_check_ro();
-    return $self->{in}->commit;
-}
-
-=item B<< id() >>
-
-Get chunk id.
-
-=cut
-sub id {
-    my $self = shift;
-    return $self->{id};
+    return $self->_in->commit;
 }
 
 sub lag {
     my $self = shift;
-    return $self->{in}->lag;
+    unless ($self->load) {
+        return 0; # probably locked in some other process, or maybe chunk is already deleted
+    }
+    return $self->_in->lag;
+}
+
+sub cleanup {
+    my $self = shift;
+    my $prefix = $self->_prefix;
+    return if -e "$prefix.chunk";
+    $self->load or return; # even if chunk doesn't exist, we'll force the lock
+    $self->remove;
 }
 
 =item B<< remove() >>
@@ -137,15 +201,15 @@ Remove chunk and all related files.
 sub remove {
     my $self = shift;
     $self->_check_ro();
-    my $prefix = "$self->{dir}/$self->{id}";
-    xunlink("$prefix.chunk");
-    xunlink("$prefix.status");
-    xunlink("$prefix.status.lock") if -e "$prefix.status.lock";
-    xunlink("$prefix.lock");
+    my $prefix = $self->_prefix;
+    _unlink("$prefix.chunk");
+    _unlink("$prefix.status");
+    _unlink("$prefix.status.lock");
+    _unlink("$prefix.lock");
 }
 
 =back
 
 =cut
 
-1;
+__PACKAGE__->meta->make_immutable;
