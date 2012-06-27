@@ -21,6 +21,7 @@ sub coverage_class {
         or /^Stream::Moose/
         or /^Stream::Queue/
         or /^Stream::Concat/
+        or /^Stream::In::DiskBuffer::Chunk/
         or /^Stream::Filter::Coro/;
 
     return 'CountParents';

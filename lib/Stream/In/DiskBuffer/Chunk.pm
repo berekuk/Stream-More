@@ -2,6 +2,18 @@ package Stream::In::DiskBuffer::Chunk;
 
 # ABSTRACT: represents one disk buffer chunk
 
+=head1 DESCRIPTION
+
+This module is used internally by L<Stream::In::DiskBuffer>.
+
+It mostly conforms to C<Stream::In> API, except that you have to pre-initialize it manually using C<load> method. It's a C<Stream::File::In> decorator.
+
+All chunks are immutable after they're created.
+
+Creating an instance of this class doesn't create any files. You have to call C<create> first to fill it.
+
+=cut
+
 use namespace::autoclean;
 use Moose;
 with
@@ -87,6 +99,13 @@ sub _prefix {
     return $self->dir.'/'.$self->id;
 }
 
+=item B<create($data)>
+
+Create the new chunk and fill it with given arrayref of data atomically.
+
+Exception will happen if chunk already exists.
+
+=cut
 sub create {
     my $self = shift;
     my ($data) = validate_pos(@_, { type => ARRAYREF });
@@ -114,7 +133,7 @@ sub create {
 
 =item B<< load($dir, $id) >>
 
-Construct chunk object corresponding to existing chunk.
+Initialize input stream. You have to call manually it before reading.
 
 =cut
 sub load {
@@ -185,6 +204,11 @@ sub lag {
     return $self->_in->lag;
 }
 
+=item B<< cleanup() >>
+
+Remove all chunk-related files if and only if the chunk is fully processed.
+
+=cut
 sub cleanup {
     my $self = shift;
     my $prefix = $self->_prefix;
