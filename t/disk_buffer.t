@@ -10,6 +10,7 @@ use Test::Deep;
 use lib 'lib';
 
 use PPB::Test::TFiles;
+use Yandex::X qw(xqx);
 use Stream::File;
 use Stream::File::Cursor;
 use Stream::In::DiskBuffer;
@@ -130,7 +131,7 @@ sub in_coderef :Tests {
 sub gc_race :Tests {
 
     my $LINES = $ENV{LINES} || 10_000;
-    my $WORKERS = 5;
+    my $WORKERS = $ENV{WORKERS} || 5;
 
     my $out = Stream::File->new('tfiles/out');
 
@@ -154,9 +155,10 @@ sub gc_race :Tests {
                 $buffered_in->lag if rand() < 5 * $WORKERS / $LINES; # call lag 5 times per worker on average
                 #  lag is prone to race contitions too, let's check whether it fails
 
-                last if time >= $time + 10; # should be enough for everyone
+                last if time >= $time + 3; # should be enough for everyone
                 my $line = $buffered_in->read;
 
+                $buffered_in->commit if rand() < 5 * $WORKERS / $LINES;
 
                 # busy-waiting
                 # otherwise it's too probable that one worker will block everyone else and then read everything himself
@@ -184,6 +186,10 @@ sub gc_race :Tests {
         last if wait == -1;
         is($?, 0, "exit code");
     }
+
+    my $files = xqx('find tfiles/buffer | wc -l');
+    chomp $files;
+    cmp_ok($files, '<', 10, 'not too many files in buffer dir');
 
     my @lines = sort { $a <=> $b } split /\n/, qx(cat tfiles/out);
     cmp_deeply(\@lines, [1 .. $LINES], "no dups");

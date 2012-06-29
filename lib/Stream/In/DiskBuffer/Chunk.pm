@@ -20,7 +20,7 @@ with
     'Stream::Moose::In',
     'Stream::Moose::In::Lag',
 ;
-use autodie qw(rename);
+use autodie qw(rename unlink);
 
 =head1 METHODS
 
@@ -36,15 +36,7 @@ use Stream::File::Cursor;
 use Stream::File;
 use Params::Validate qw(:all);
 use Try::Tiny;
-
-# internal function
-sub _unlink {
-    my ($file) = @_;
-    return unless -e $file;
-    unlink $file; # no autodie for unlink
-    die "unlink $file failed: $!" if -e $file;
-}
-
+use File::Temp;
 
 has 'dir' => (
     is => 'ro',
@@ -88,7 +80,13 @@ has 'format_obj' => (
 );
 
 has '_lock' => (
-    is => 'rw', # init lazily, once, in load()
+    is => 'ro',
+    lazy => 1,
+    default => sub {
+        my $self = shift;
+        return if $self->read_only;
+        return lockf($self->_prefix.".lock", { blocking => 0 });
+    },
 );
 has '_in' => (
     is => 'rw', # init lazily, once, in load()
@@ -111,17 +109,13 @@ sub create {
     my ($data) = validate_pos(@_, { type => ARRAYREF });
 
     my $file = $self->_prefix.".chunk";
-    my $new_file = "$file.new";
+    my $new_file = "".File::Temp->new(DIR => $self->dir, TEMPLATE => 'tmpchunkXXXXXX', UNLINK => 0);
 
     if ($self->_in) {
         die "Can't recreate chunk, $self is already initialized";
     }
     if (-e $file) {
         die "Can't recreate chunk, $file already exists";
-    }
-    if (-e $new_file) {
-        WARN "removing unexpected temporary file $new_file";
-        _unlink($new_file);
     }
     my $storage = Stream::File->new($new_file);
     $storage = $self->format_obj->wrap($storage) if $self->format_obj;
@@ -144,11 +138,8 @@ sub load {
     my $prefix = $self->_prefix;
     my $file = "$prefix.chunk";
     return unless -e $file; # this check is unnecessary, but it reduces number of fanthom lock files
-    my $lock;
-    unless ($self->read_only) {
-        $lock = lockf("$prefix.lock", { blocking => 0 }) or return;
-    };
-    $self->_lock($lock);
+    my $lock = $self->_lock;
+    return unless $lock or $self->read_only;
     return unless -e $file;
 
     # it's still possible that file will disappear (if we're in r/o mode and didn't acquire the lock)
@@ -213,7 +204,7 @@ sub cleanup {
     my $self = shift;
     my $prefix = $self->_prefix;
     return if -e "$prefix.chunk";
-    $self->load or return; # even if chunk doesn't exist, we'll force the lock
+    $self->_lock or return; # even if chunk doesn't exist, we'll force the lock
     $self->remove;
 }
 
@@ -225,11 +216,11 @@ Remove chunk and all related files.
 sub remove {
     my $self = shift;
     $self->_check_ro();
+
     my $prefix = $self->_prefix;
-    _unlink("$prefix.chunk");
-    _unlink("$prefix.status");
-    _unlink("$prefix.status.lock");
-    _unlink("$prefix.lock");
+    for (map { "$prefix.$_" } qw/ chunk status status.lock lock /) {
+        unlink $_ if -e $_;
+    }
 }
 
 =back

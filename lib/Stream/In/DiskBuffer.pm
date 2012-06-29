@@ -17,7 +17,7 @@ use Carp;
 use Yandex::Logger;
 use Yandex::Lockf 3.0;
 use Yandex::Persistent;
-use Yandex::X;
+use autodie qw(unlink);
 use Stream::In::DiskBuffer::Chunk;
 
 use Scalar::Util qw(blessed);
@@ -338,26 +338,27 @@ sub gc {
         next if $file =~ /^meta/;
         next if $file =~ /^read_lock$/;
         next if $file =~ /^\d+\.chunk$/;
-        my $unlink = sub {
-            xunlink("$self->{dir}/$file");
-        };
-
         if (my ($id) = $file =~ /^(\d+)\.(?: lock | status | status\.lock )$/x) {
             my $chunk = $self->_chunk($id);
             $chunk->cleanup;
             next;
         }
 
-        if ($file =~ /^(\d+)\.chunk\.new$/ or $file =~ /^yandex\.tmp\./) {
-            my $age = time - (stat($file))[10];
-            unless ($age < 600) {
-                $unlink->();
+        my $abs_file = "$self->{dir}/$file";
+
+        if ($file =~ /^tmpchunk/ or $file =~ /^yandex\.tmp\./) {
+            my $ctime = (stat $abs_file)[10];
+            next unless $ctime; # tmp file already disappeared
+            my $age = time - $ctime;
+            if (-e $abs_file and $age > 600) { # tmp file is too old
+                unlink $abs_file;
                 DEBUG "Temp file $file removed";
-                next;
             }
+            next;
         }
+
         WARN "Removing unknown file $file";
-        $unlink->();
+        unlink $abs_file;
     }
     closedir $dh or die "Can't close '$self->{dir}': $!";
 }
