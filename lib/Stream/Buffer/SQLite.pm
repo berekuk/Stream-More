@@ -198,29 +198,24 @@ sub _id {
 
 sub save {
     my $self = shift;
-    my ($chunk, $limit) = @_;
+    my ($chunk) = @_;
     my $chunk_size = @$chunk;
 
     die "Chunk size exceeded: $self->{dir}: $self->{_db_file}" if $self->{max_chunk_size} and $self->{_db_size} + $chunk_size > $self->{max_chunk_size};
 
-    my $result = [];
-
     for my $data (@$chunk) {
-
         my $id = $self->_id;
-        my $push = $limit-- > 0 ? $result : $self->{_buffer};
-        push @$push, [$id => $data];
+        push @{ $self->{_buffer} }, [$id => $data];
 
         $self->{_dbh}->do(qq{
             insert into buffer (id, data) values (?, ?)
         }, undef, $id, $data); #TODO: prepare/execute?
-
     }
 
     $self->{_dbh}->commit(); # fsync?
 
     $self->{_db_size} += @$chunk;
-    return $result;
+    return;
 }
 
 sub load {
@@ -244,11 +239,10 @@ sub load {
             });
             $dbh->commit();
 
-            push @$result, @{ $self->save($buffer, $limit - @$result) };
-
+            $self->save($buffer);
             undef $dbh;
             unlink $file or die "$file: unlink failed: $!";
-
+            next;
         } else {
 
             push @$result, splice @{$self->{_buffer}}, 0, $limit - @$result;

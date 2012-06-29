@@ -73,7 +73,10 @@ sub read_chunk {
     # $in is supposed to be thread-safe
     my $chunk = $in->read_chunk($limit); #TODO: load some more in advance?
     if ($chunk) {
-        push @$result, @{$self->{buffer}->save($chunk, $limit)} if @$chunk;
+        if (@$chunk) {
+            $self->{buffer}->save($chunk);
+            push @$result, @{ $self->{buffer}->load($limit) };
+        }
         $in->commit;
     }
 
