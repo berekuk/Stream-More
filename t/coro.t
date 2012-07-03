@@ -15,6 +15,13 @@ use Stream::Simple qw( array_in code_out );
 use Coro::AnyEvent;
 use Coro;
 
+my $get_state_count = sub {
+    my @states;
+    @states = Coro::State::list;
+    return scalar @states;
+};
+
+
 sub main :Tests {
     my $filter = filter {
         Coro::AnyEvent::sleep 1;
@@ -76,11 +83,6 @@ sub multiple_commits :Tests {
 
 sub destructor :Tests {
 
-    my $get_state_count = sub {
-        my @states;
-        @states = Coro::State::list;
-        return scalar @states;
-    };
     my $orig_threads = $get_state_count->();
 
     {
@@ -106,11 +108,45 @@ sub destructor :Tests {
             filter => sub { $filter },
         );
         eval {
-            process(array_in([ 1 .. 10 ]) => $filter | code_out {});
+            process(array_in([ 1 .. 10 ]) => $coro_filter | code_out {});
         };
     }
 
     is($orig_threads, $get_state_count->(), 'no threads leaked after processing with exceptions');
 }
 
+sub leaks :Tests {
+
+    my $orig_threads = $get_state_count->();
+
+    {
+        my $filter = filter {
+            cede;
+            return shift;
+        };
+        my $coro_filter = Stream::Filter::Coro->new(
+            threads => 4,
+            filter => sub { $filter },
+        );
+        process(array_in([ 1 .. 10 ]) => $coro_filter | code_out {});
+
+        is($orig_threads, $get_state_count->(), 'no threads leaked after processing');
+    }
+
+    {
+        my $filter = filter {
+            die "oops";
+        };
+        my $coro_filter = Stream::Filter::Coro->new(
+            threads => 4,
+            filter => sub { $filter },
+        );
+        eval {
+            process(array_in([ 1 .. 10 ]) => $coro_filter | code_out {});
+        };
+
+        is($orig_threads, $get_state_count->(), 'no threads leaked after processing with exceptions');
+    }
+
+}
 __PACKAGE__->new->runtests;
