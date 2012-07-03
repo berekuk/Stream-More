@@ -40,7 +40,7 @@ my $counter = 0;
 
 sub _persistent {
     my ($file) = @_;
-    return Yandex::Persistent->new($file, { auto_commit => 0 }, { blocking => 0, remove => 1 });
+    return Yandex::Persistent->new($file, { format => 'json', auto_commit => 0 }, { blocking => 0, remove => 1 });
 }
 
 has 'dir' => (
