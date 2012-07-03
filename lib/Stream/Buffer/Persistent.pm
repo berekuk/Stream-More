@@ -9,6 +9,12 @@ use Params::Validate qw(:all);
 use Yandex::Logger;
 use Yandex::Persistent;
 
+=head1 DESCRIPTION
+
+This is a L<Yandex::Persistent>-based buffer implementation.
+
+It's not very optimal (we re-serialize the whole buffer file on each C<commit>), but it's still much faster than L<Stream::Buffer::SQLite>.
+
 =head1 METHODS
 
 =over
@@ -204,6 +210,14 @@ sub lag {
 }
 
 =back
+
+=head1 SEE ALSO
+
+L<Stream::Buffer::Role> - role for all buffer implementations.
+
+L<Stream::Buffer::SQLite> - sqlite-based buffer; it should've been faster in theory (real indices and stuff), but it's much slower because SQLite fsyncs on each commit.
+
+C<bench/buffer.pl> in stream-more repository for the benchmarks.
 
 =cut
 
