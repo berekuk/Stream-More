@@ -26,11 +26,11 @@ A local directory to store uncommited data. The buffer is implemented as a set o
 
 =item I<max_chunk_size>
 
-Maximum number of items to be stored in a single SQLite database. 1000 by default. Set to 0 to disable the chunk size control.
+Maximum number of items to be stored in a single persistent file. 1000 by default. Set to 0 to disable the chunk size control.
 
 =item I<max_chunk_count>
 
-Maximum number of SQLite databases to create. 100 by default. Multiple databases are required to provide a concurrent access to the buffer.
+Maximum number of persistent files to create. 100 by default. Multiple files are required to provide a concurrent access to the buffer.
 
 =back
 
@@ -122,9 +122,6 @@ sub _create_buffer {
     $self->{_id} ||= 0;
 
     $self->{_db_size} = @{$self->{_buffer}};
-
-    #use Data::Dumper;
-    #warn Dumper($self);
 }
 
 sub _id {
@@ -143,7 +140,6 @@ sub save {
         my $id = $self->_id;
         push @{ $self->{_buffer} }, [$id => $data];
 
-        #warn "save($id, $data)";
         $self->{_dbh}{data}{$id} = $data;
     }
 
@@ -170,7 +166,6 @@ sub load {
             my $buffer = [ values %{ $db->{data} } ];
 
             $self->save($buffer);
-            #warn "removing $file";
             $db->delete;
             next;
         } else {
@@ -187,11 +182,9 @@ sub load {
 
 sub delete {
     my $self = shift;
-    my ($ids) = @_; #TODO: no ids => delete everything already loaded
+    my ($ids) = @_;
 
     for my $id (@$ids) {
-        #warn "delete($id)";
-
         my $deleted = delete $self->{_dbh}{data}{$id};
 
         unless (defined $deleted) {
