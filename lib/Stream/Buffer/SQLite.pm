@@ -159,6 +159,7 @@ sub _init_db {
         RaiseError => 1,
         PrintError => 0,
     });
+    $dbh->do(qq{pragma synchronous = off});
     $self->_upgrade($dbh);
     return $dbh;
 }
