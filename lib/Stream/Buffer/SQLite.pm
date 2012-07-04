@@ -2,10 +2,9 @@ package Stream::Buffer::SQLite;
 
 # ABSTRACT: ulitily class to store uncommited data in a local sqlite buffers
 
-use strict;
-use warnings;
-
 use namespace::autoclean;
+use Moose;
+with 'Stream::Buffer::Role';
 
 use Params::Validate qw(:all);
 
@@ -34,13 +33,13 @@ No read/only support.
 =item B<< new($params) >>
 =item B<< new(%$params) >>
 
-Constructor. 
+Constructor.
 
 =over
 
 =item I<dir>
 
-A local directory to store uncommited data. The buffer is implemented as a set of SQLite databases. This parameter is mandatory. 
+A local directory to store uncommited data. The buffer is implemented as a set of SQLite databases. This parameter is mandatory.
 
 =item I<max_chunk_size>
 
@@ -73,21 +72,29 @@ sub _lockf {
     }
 }
 
-sub new {
-    my $class = shift;
-    my $self = validate(@_, { 
-        dir => 1,
-        max_chunk_size => { default => 1000 },
-        max_chunk_count => { default => 100 },
-    });
+has 'dir' => (
+    is => 'ro',
+    required => 1,
+);
 
-    bless $self => $class;
+has 'max_chunk_size' => (
+    is => 'ro',
+    isa => 'Int',
+    default => 1000,
+);
+
+has 'max_chunk_count' => (
+    is => 'ro',
+    isa => 'Int',
+    default => 100,
+);
+
+sub BUILD {
+    my $self = shift;
     $self->_create_buffer();
-
-    return $self;
 }
 
-sub DESTROY {
+sub DEMOLISH {
     local $@;
     my $self = shift;
     $self->{_dbh}->rollback() if $self->{_dbh};
@@ -106,7 +113,7 @@ sub _find_buffer {
         DEBUG "$file: found and locked";
         return ($lockf, $file);
     }
-    
+
     return;
 }
 
@@ -133,7 +140,7 @@ sub _create_buffer {
     $self->{_db_file} = $file;
 
     $self->{_dbh} = $self->_init_db($file);
-    
+
     $self->{_buffer} = $self->{_dbh}->selectall_arrayref(qq{
         select id, data from buffer order by id
     });
@@ -152,6 +159,7 @@ sub _init_db {
         RaiseError => 1,
         PrintError => 0,
     });
+    $dbh->do(qq{pragma synchronous = off});
     $self->_upgrade($dbh);
     return $dbh;
 }
@@ -189,43 +197,28 @@ sub _id {
     return $self->{_id}++;
 }
 
-=item B<save($chunk, $limit)>
-
-Save C<@$chunk> items into a buffer, enumerate them and return up to C<$limit> of them back.
-
-=cut
 sub save {
     my $self = shift;
-    my ($chunk, $limit) = @_;
+    my ($chunk) = @_;
     my $chunk_size = @$chunk;
 
     die "Chunk size exceeded: $self->{dir}: $self->{_db_file}" if $self->{max_chunk_size} and $self->{_db_size} + $chunk_size > $self->{max_chunk_size};
 
-    my $result = [];
-
     for my $data (@$chunk) {
-
         my $id = $self->_id;
-        my $push = $limit-- > 0 ? $result : $self->{_buffer};
-        push @$push, [$id => $data];
+        push @{ $self->{_buffer} }, [$id => $data];
 
         $self->{_dbh}->do(qq{
             insert into buffer (id, data) values (?, ?)
         }, undef, $id, $data); #TODO: prepare/execute?
-
     }
 
     $self->{_dbh}->commit(); # fsync?
 
     $self->{_db_size} += @$chunk;
-    return $result;
+    return;
 }
 
-=item B<load($limit)>
-
-Load up to C<$limit> enumerated items from a buffer.
-
-=cut
 sub load {
     my $self = shift;
     my ($limit) = @_;
@@ -247,13 +240,12 @@ sub load {
             });
             $dbh->commit();
 
-            push @$result, @{ $self->save($buffer, $limit - @$result) };
-
+            $self->save($buffer);
             undef $dbh;
             unlink $file or die "$file: unlink failed: $!";
-            
+            next;
         } else {
-            
+
             push @$result, splice @{$self->{_buffer}}, 0, $limit - @$result;
         }
 
@@ -264,17 +256,12 @@ sub load {
     return $result;
 }
 
-=item B<delete($ids)>
-
-Remove items identified by C<@$ids> from the buffer.
-
-=cut
 sub delete {
     my $self = shift;
     my ($ids) = @_; #TODO: no ids => delete everything already loaded
 
     for my $id (@$ids) {
-    
+
         my $deleted = $self->{_dbh}->do(qq{
             delete from buffer where id = ?
         }, undef, $id);
@@ -288,11 +275,6 @@ sub delete {
 }
 
 
-=item B<lag()>
-
-Measure buffer size in bytes.
-
-=cut
 sub lag {
     my $self = shift;
     my $lag = 0;
@@ -304,4 +286,4 @@ sub lag {
 
 =cut
 
-1;
+__PACKAGE__->meta->make_immutable;

@@ -16,6 +16,7 @@ use Params::Validate qw(:all);
 
 use Yandex::Logger;
 use Stream::Buffer::SQLite;
+use Stream::Buffer::Persistent;
 
 =head1 SYNOPSIS
 
@@ -51,11 +52,14 @@ sub new {
         dir => 1,
         max_chunk_size => 0,
         max_chunk_count => 0,
+        buffer_class => { default => 'Stream::Buffer::SQLite' },
     });
     my $self = {};
     bless $self => $class;
     $self->{in} = ref $in eq "CODE" ? $in : sub { $in };
-    $self->{buffer} = Stream::Buffer::SQLite->new($opts);
+
+    my $buffer_class = $opts->{buffer_class};
+    $self->{buffer} = $buffer_class->new($opts);
 
     return $self;
 }
@@ -73,7 +77,10 @@ sub read_chunk {
     # $in is supposed to be thread-safe
     my $chunk = $in->read_chunk($limit); #TODO: load some more in advance?
     if ($chunk) {
-        push @$result, @{$self->{buffer}->save($chunk, $limit)} if @$chunk;
+        if (@$chunk) {
+            $self->{buffer}->save($chunk);
+            push @$result, @{ $self->{buffer}->load($limit) };
+        }
         $in->commit;
     }
 

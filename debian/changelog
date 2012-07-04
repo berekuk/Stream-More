@@ -1,3 +1,11 @@
+libstream-more-perl (0.13.0) unstable; urgency=low
+
+  * Stream::Buffer::Persistent - SQLite buffer alternative
+  * common Stream::Buffer::Role role
+  * refactor buffers API a bit (save() is more straightforward)
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Fri, 29 Jun 2012 23:09:36 +0400
+
 libstream-more-perl (0.12.1) unstable; urgency=low
 
   * DiskBuffer: more fixes
