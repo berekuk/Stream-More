@@ -1,10 +1,14 @@
 libstream-more-perl (0.13.0) unstable; urgency=low
 
+  [ Vyacheslav Matjukhin (No comments) ]
   * Stream::Buffer::Persistent - SQLite buffer alternative
   * common Stream::Buffer::Role role
   * refactor buffers API a bit (save() is more straightforward)
 
- -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Fri, 29 Jun 2012 23:09:36 +0400
+  [ Andrei Mishchenko ]
+  * Stream::Buffer::SQLite - turn off auto fsync 
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Wed, 04 Jul 2012 15:13:11 +0400
 
 libstream-more-perl (0.12.1) unstable; urgency=low
 

@@ -49,4 +49,7 @@ Measure buffer size in bytes.
 =cut
 requires 'lag';
 
+=back
+=cut
+
 1;
