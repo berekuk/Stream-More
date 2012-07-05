@@ -112,6 +112,8 @@ sub _read_all {
             }
 
             $self->_clear_coros;
+            $self->_clear_in;
+            $self->_clear_out;
             die $result->{exception};
         }
         else {
