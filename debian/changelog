@@ -1,8 +1,9 @@
 libstream-more-perl (0.13.1) unstable; urgency=low
 
+  [ nikita ]
   * Stream::Filter::Coro : fix memory leaks
 
- -- nikita <nikita@yandex-team.ru>  Tue, 03 Jul 2012 20:54:51 +0400
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Thu, 05 Jul 2012 17:54:17 +0400
 
 libstream-more-perl (0.13.0) unstable; urgency=low
 
