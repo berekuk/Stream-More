@@ -1,3 +1,9 @@
+libstream-more-perl (0.13.2) unstable; urgency=low
+
+  * fix RoundRobin buffer => 0 mode 
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Fri, 06 Jul 2012 13:06:41 +0400
+
 libstream-more-perl (0.13.1) unstable; urgency=low
 
   [ nikita ]

@@ -269,6 +269,25 @@ sub race :Tests {
     cmp_deeply(\@lines, [1 .. $lines], "no dups");
 }
 
+sub no_buffer :Tests {
+
+    my $self = shift;
+    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', buffer => 0, data_size => 1000);
+    $storage->register_client("main");
+
+    $storage->write("x\n");
+    $storage->commit;
+
+    my $in = $storage->in("main", { buffer => 0 });
+
+    is_deeply($in->read_chunk(2), [ "x\n" ]);
+    is($in->read_chunk(2), undef);
+    $in->commit;
+    $in = $storage->in("main", { buffer => 0 });
+    is($in->read_chunk(2), undef);
+
+}
+
 {
     my @tests;
 
