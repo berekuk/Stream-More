@@ -246,4 +246,22 @@ sub gc_race :Tests {
     cmp_deeply(\@lines, [1 .. $LINES], "no dups");
 }
 
+sub permissions :Tests {
+    my $file = Stream::File->new('tfiles/file');
+    $file->write("$_\n") for 'a'..'z';
+    $file->commit;
+
+    my $in = $file->stream(Stream::File::Cursor->new('tfiles/cursor'));
+
+    my $buffered_in = Stream::In::DiskBuffer->new($in, 'tfiles/buffer');
+    $buffered_in->read;
+
+    my @chunks = glob 'tfiles/buffer/*.chunk';
+    is scalar @chunks, 1;
+
+    my @stat = stat $chunks[0];
+    is sprintf("%o", $stat[2] & 0777), '644';
+}
+
+
 __PACKAGE__->new->runtests;
