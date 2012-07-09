@@ -36,7 +36,6 @@ use Stream::File::Cursor;
 use Stream::File;
 use Params::Validate qw(:all);
 use Try::Tiny;
-use File::Temp;
 
 has 'dir' => (
     is => 'ro',
@@ -104,12 +103,15 @@ Create the new chunk and fill it with given arrayref of data atomically.
 Exception will happen if chunk already exists.
 
 =cut
+my $uid = int rand 100000; # per-process random uid for generating random tmp file names
 sub create {
     my $self = shift;
     my ($data) = validate_pos(@_, { type => ARRAYREF });
 
     my $file = $self->_prefix.".chunk";
-    my $new_file = "".File::Temp->new(DIR => $self->dir, TEMPLATE => 'tmpchunkXXXXXX', UNLINK => 0);
+
+    # we can't use File::Temp here - it creates files with 600 permissions which breaks read-only mode
+    my $new_file = $self->_prefix.".tmp.$$.".time.".".($uid++);
 
     if ($self->_in) {
         die "Can't recreate chunk, $self is already initialized";
