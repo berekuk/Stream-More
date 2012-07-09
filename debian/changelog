@@ -1,3 +1,9 @@
+libstream-more-perl (0.13.3) unstable; urgency=low
+
+  * fix DiskBuffer race leading to premature end-of-data 
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Mon, 09 Jul 2012 18:13:13 +0400
+
 libstream-more-perl (0.13.2) unstable; urgency=low
 
   * fix RoundRobin buffer => 0 mode 

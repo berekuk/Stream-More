@@ -10,7 +10,7 @@ use Test::Deep;
 use lib 'lib';
 
 use PPB::Test::TFiles;
-use Yandex::X qw(xqx);
+use Yandex::X qw(xqx xfork);
 use Stream::File;
 use Stream::File::Cursor;
 use Stream::In::DiskBuffer;
@@ -126,6 +126,57 @@ sub in_coderef :Tests {
     is(@db1_data + @db2_data, 26, '26 items total');
     ok(@db1_data > 10, 'at least 10 items from first db');
     ok(@db2_data > 10, 'at least 10 items from second db');
+}
+
+sub steal_new_chunk_race :Tests {
+
+    my $file = Stream::File->new('tfiles/file');
+    my $TOTAL = 50000;
+    $file->write("$_\n") for 1 .. $TOTAL;
+    $file->commit;
+
+    my $gen_in = sub {
+        return Stream::File->new('tfiles/file')->stream(Stream::File::Cursor->new('tfiles/cursor'));
+    };
+
+    my $PROCESSES = 5;
+    for my $process (1 .. $PROCESSES) {
+        xfork and next;
+        eval {
+            my $in = Stream::In::DiskBuffer->new($gen_in, 'tfiles/buffer');
+            my $out = Stream::File->new("tfiles/file.$process");
+            while () {
+                my $line = $in->read();
+                last unless $line;
+                $out->write($line);
+                if (rand(100) < 3) {
+                    $in->commit();
+                    undef $in;
+                    $in = Stream::In::DiskBuffer->new($gen_in, 'tfiles/buffer');
+                }
+            }
+            $out->commit();
+            $in->commit();
+        };
+        if ($@) {
+            warn "$@";
+            exit(1);
+        }
+        exit;
+    }
+    while () {
+        last if wait == -1;
+        is($?, 0, "error code");
+    }
+    my @counts;
+    for (1 .. $PROCESSES) {
+        push @counts, int(xqx("cat tfiles/file.$_ | wc -l"));
+    }
+    my $total = int(xqx("cat tfiles/file.* | wc -l"));
+    is($total, $TOTAL, "total count");
+    for (1 .. $PROCESSES) {
+        cmp_ok(shift @counts, ">", $TOTAL/$PROCESSES*0.8, "no premature exit");
+    }
 }
 
 sub gc_race :Tests {

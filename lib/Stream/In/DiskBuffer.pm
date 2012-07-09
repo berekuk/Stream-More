@@ -217,10 +217,12 @@ sub _next_chunk {
 
     # no chunks left
     unless ($self->{read_only}) {
-        my $new_chunk_id = $self->_new_chunk or return;
-        $try_chunk->("$self->{dir}/$new_chunk_id.chunk") and return 1;
+        while () {
+            my $new_chunk_id = $self->_new_chunk or return;
+            $try_chunk->("$self->{dir}/$new_chunk_id.chunk") and return 1;
+        }
     } 
-    return; 
+    return;
 }
 
 =item B<< read() >>
