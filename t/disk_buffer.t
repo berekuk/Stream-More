@@ -147,7 +147,7 @@ sub steal_new_chunk_race :Tests {
             my $out = Stream::File->new("tfiles/file.$process");
             while () {
                 my $line = $in->read();
-                last unless $line;
+                last unless $line; # some bugs lead to a premature 'undef' returned from a non ampty DiskBuffer
                 $out->write($line);
                 if (rand(100) < 3) {
                     $in->commit();
