@@ -22,7 +22,7 @@ use warnings;
 use parent qw(Exporter);
 our @EXPORT_OK = qw/
     array_seq array_in code_in code_out memory_storage
-    coro_filter coro_out
+    coro_filter coro_out switch_out
 /;
 
 use Carp;
@@ -30,6 +30,7 @@ use Stream::Simple::ArrayIn;
 use Stream::Simple::CodeIn;
 use Stream::MemoryStorage;
 use Stream::Simple::CodeOut;
+use Stream::Simple::SwitchOut;
 use Stream::Filter qw/filter/;
 use Stream::Filter::Coro;
 use Params::Validate qw(:all);
@@ -79,6 +80,25 @@ sub code_out(&;&) {
     croak "Expected commit callback" if ($commit_callback && ref($commit_callback) ne 'CODE');
     # alternative constructor
     return Stream::Simple::CodeOut->new($callback, $commit_callback);
+}
+
+=item B<< switch_out($switch, $cases) >>
+
+B<$switch> should be coderef, B<$cases> should be hashref like { 'type_a' => stream-pipe, [ 'otherwise' => stream-pipe ] }
+B<otherwise> is optional and by default is out::null.
+
+Creates anonymous output stream which writes item in case-stream according to fetched by switch-sub value.
+Then it calls B<commit()> on dirty case-streams only.
+
+=cut
+sub switch_out(&$) {
+    my ($switch, $cases) = @_;
+    croak "Expected switch - callback" unless ref($switch) eq 'CODE';
+    croak "Expected cases - hashref" unless ref($cases) eq 'HASH';
+
+    do { croak "Expected stream pipe" unless eval{ $_->isa('Stream::Out') } } for values %$cases;
+    # alternative constructor
+    return Stream::Simple::SwitchOut->new($switch, $cases);
 }
 
 =item B<< coro_out($threads => $coderef) >>
