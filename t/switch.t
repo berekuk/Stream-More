@@ -23,31 +23,46 @@ use Stream::Simple qw/code_out array_in switch_out/;
     is(scalar @bad, 1, 'items processed - bad');
 }
 
-{ # otherwise => null
+{ # default => null
     my @res = ();
     my $out = Stream::Simple::SwitchOut->new(sub { $_[0]->{type} }, { 'good' => code_out(sub { push @res, shift; }) });
 
     process( array_in([ { type => 'good' }, { type => 'bad' }, { type => 'good' } ]) => $out );
 
-    is(scalar @res, 2, 'items processed - otherwise - null');
+    is(scalar @res, 2, 'items processed - default - null');
 }
 
-{ # otherwise
+{ # default
     my @res = ();
-    my @otherwise = ();
-    my $out = Stream::Simple::SwitchOut->new(sub { $_[0]->{type} }, { 'good' => code_out(sub { push @res, shift; }), 'otherwise' => code_out(sub { push @otherwise, shift;})});
+    my @default = ();
+    my $out = Stream::Simple::SwitchOut->new(sub { $_[0]->{type} }, { 'good' => code_out(sub { push @res, shift; }), 'default' => code_out(sub { push @default, shift;})});
 
     process( array_in([ { type => 'good' }, { type => 'bad' }, { type => 'good' }, { test => 'undef' }, { test => 'sth else', type => 'mystic' } ]) => $out );
 
-    is(scalar @res, 2, 'items processed - otherwise - null');
-    is(scalar @otherwise , 3, 'items processed - otherwise - collect');
+    is(scalar @res, 2, 'items processed - default - null');
+    is(scalar @default , 3, 'items processed - default - collect');
 }
 
-{
+{ # write_chunk
+    my @res = ();
+    my $out = Stream::Simple::SwitchOut->new(sub { $_[0]->{type} }, { 'good' => code_out(sub { push @res, shift; }) });
+
+    $out->write({ type => 'good' }, { type => 'bad' }, { type => 'good' });
+    is(scalar @res, 0, 'no write items unless chunk-size');
+
+    $out->write_chunk([ { type => 'good' }, { type => 'bad' }, { type => 'good' } ]);
+    is(scalar @res, 0, 'no write_chunk items unless chunk-size');
+
+    $out->commit();
+
+    is(scalar @res, 4, 'items processed');
+}
+
+{ # >>> simple tests
     my $simple = switch_out { $_[0]->{test} } { test => code_out(sub{}) };
 
     isa_ok($simple, 'Stream::Out');
-    
+
     eval {
         $simple = switch_out { $_[0]->{test} } { test => {} };
     };
@@ -71,7 +86,7 @@ use Stream::Simple qw/code_out array_in switch_out/;
 
     process( array_in([ { type => 'good' }, { type => 'bad' }, { type => 'good' }, { test => 'undef' }, { test => 'sth else', type => 'mystic' } ]) => $out );
 
-    is(scalar @res, 2, 'items processed - otherwise - null');
+    is(scalar @res, 2, 'items processed - default - null');
     is($commit_count, 1, 'commites once');
 
     process( array_in([ { type => 'bad' }, { test => 'undef' }, { test => 'sth else', type => 'mystic' } ]) => $out );
