@@ -4,6 +4,8 @@ use lib 'lib';
 use Streams;
 use Stream::Simple::SwitchOut;
 use Stream::Simple qw/code_out array_in switch_out/;
+use Stream::MemoryStorage;
+use Benchmark qw/:all/;
 
 { # ISA
     my @res = ();
@@ -92,6 +94,27 @@ use Stream::Simple qw/code_out array_in switch_out/;
     process( array_in([ { type => 'bad' }, { test => 'undef' }, { test => 'sth else', type => 'mystic' } ]) => $out );
     is(scalar @res, 2, 'no good items');
     is($commit_count, 1, 'no commit whether not dirty');
+}
+
+{
+    my $out = switch_out { $_[0]->{type} } { 'good' => Stream::MemoryStorage->new(), bad => Stream::MemoryStorage->new(), default => Stream::MemoryStorage->new() };
+    my $items = [];
+
+    push @$items, { type => (($_ % 2 == 0)?'good':($_ % 3)?'bad':'test'), id => $_ } for (0..10000);
+
+    my $r = timethese( 5000, {
+        'write' => sub {
+            process( array_in($items) => $out, { chunk_size => 1, commit_step => 10000 });
+        },
+        'write_chunk 1000' => sub {
+            process( array_in($items) => $out, { chunk_size => 1000, commit_step => 10000 });
+        },
+        'write_chunk 10000' => sub {
+            process( array_in($items) => $out, { chunk_size => 10000, commit_step => 10000 });
+        },
+    } );
+
+    like(@{cmpthese $r}->[1]->[4], qr/-\d+%/, 'write - slower');
 }
 
 done_testing;

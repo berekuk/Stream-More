@@ -30,7 +30,7 @@ sub write {
 sub write_chunk($$) {
     my ($self, $chunk) = @_;
 
-    $self->write_item($_) for (@$chunk);
+    $self->_write_item($_) for (@$chunk);
 
     for my $case (values %{$self->{cases}}) {
         if (scalar @{$case->{chunk}} >= $self->{chunk_size}) {
@@ -40,7 +40,7 @@ sub write_chunk($$) {
     }
 }
 
-sub write_item($$) {
+sub _write_item($$) {
     my ($self, $item) = @_;
     my $value = $self->{switch}->($item) || 'default';
 
