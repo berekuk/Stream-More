@@ -1,3 +1,10 @@
+libstream-more-perl (0.13.5) unstable; urgency=low
+
+  * switch_out simple ->> for simplifying Multiplex->new([filter({ check(...)
+    })]) constructions
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Wed, 18 Jul 2012 13:08:24 +0400
+
 libstream-more-perl (0.13.4) unstable; urgency=low
 
   * DiskBuffer: fix read-only mode
