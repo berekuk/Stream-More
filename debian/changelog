@@ -1,3 +1,9 @@
+libstream-more-perl (0.13.5) unstable; urgency=low
+
+  * Stream::Buffer::File written
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Tue, 24 Jul 2012 18:52:08 +0400
+
 libstream-more-perl (0.13.4) unstable; urgency=low
 
   * DiskBuffer: fix read-only mode

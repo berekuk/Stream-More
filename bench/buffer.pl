@@ -47,6 +47,6 @@ my $gen_sub = sub {
 
 warn "Benchmark.pm doesn't count disk operations, take a look at wall seconds, not at operations-per-second!";
 timethese($ENV{TIMES} || 10, {
-    map { $_ => $gen_sub->($_) } qw/ Stream::Buffer::Persistent Stream::Buffer::SQLite /
+    map { $_ => $gen_sub->($_) } qw/ Stream::Buffer::Persistent Stream::Buffer::SQLite Stream::Buffer::File /
 });
 

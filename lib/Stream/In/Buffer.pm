@@ -17,6 +17,7 @@ use Params::Validate qw(:all);
 use Yandex::Logger;
 use Stream::Buffer::SQLite;
 use Stream::Buffer::Persistent;
+use Stream::Buffer::File;
 
 =head1 SYNOPSIS
 

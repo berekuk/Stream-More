@@ -175,7 +175,7 @@ sub buffers :Tests {
     my @mq = map { $self->_buffer($in) } (1 .. 4);
     $_->read_chunk(2) for @mq;
     undef @mq;
-
+    
     my $mq1 = $self->_buffer($in);
     my $mq2 = $self->_buffer($in);
 
@@ -240,5 +240,6 @@ sub unlink_lockf_race :Tests {
     }
 }
 
-__PACKAGE__->new(buffer_class => 'Stream::Buffer::Persistent')->runtests;
-__PACKAGE__->new(buffer_class => 'Stream::Buffer::SQLite')->runtests;
+#__PACKAGE__->new(buffer_class => 'Stream::Buffer::Persistent')->runtests;
+#__PACKAGE__->new(buffer_class => 'Stream::Buffer::SQLite')->runtests;
+__PACKAGE__->new(buffer_class => 'Stream::Buffer::File')->runtests;
