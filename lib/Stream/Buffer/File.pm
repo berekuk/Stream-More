@@ -8,7 +8,7 @@ with 'Stream::Buffer::Role';
 use Params::Validate qw(:all);
 
 use Yandex::Logger;
-use Yandex::X qw(xopen xclose);
+use Yandex::X qw(xopen xclose xunlink);
 use Yandex::Lockf 3.0.0;
 
 =head1 DESCRIPTION
@@ -67,7 +67,7 @@ sub BUILD {
 sub DEMOLISH {
     local $@;
     my $self = shift;
-    unlink($self->{_file}) if $self->{_file} and defined $self->{_state} and scalar(keys %{$self->{_state}}) == 0;
+    xunlink $self->{_file} if $self->{_file} and defined $self->{_state} and scalar(keys %{$self->{_state}}) == 0;
 }
 
 sub _find_buffer {
@@ -86,7 +86,8 @@ sub _find_buffer {
 }
 
 sub _dump_file {
-    my ($self, $file, $buffer, $state) = @_;
+    my $self = shift;
+    my ($file, $buffer, $state) = @_;
     
     my $fh = xopen '<', $file;
     my $log_size = 0;
@@ -108,6 +109,7 @@ sub _dump_file {
         }
         ++$log_size;
     }
+
     @$buffer = map { [ $_ => $state->{$_} ] } sort {$a <=> $b} keys %$state;
     xclose $fh;
     return $log_size; 
@@ -142,7 +144,7 @@ sub _create_buffer {
     $self->{_id} = $self->{_buffer}->[-1]->[0] + 1 if @{$self->{_buffer}};
     $self->{_id} ||= 0;
 
-    $self->{_items_size} = @{$self->{_buffer}};
+    $self->{_items_size} = scalar(@{$self->{_buffer}});
 }
 
 sub _flush_buffer {
@@ -169,6 +171,7 @@ sub _flush_buffer {
 
     my $state = $self->{_state};
     my @log_data = map { [ $_ => $state->{$_} ] } sort {$a <=> $b} keys %$state;
+    
     my $fh = xopen '>', $file;
     for my $item (@log_data) {
         print $fh $item->[0] . "\t+\t" . $item->[1] . "\n";
@@ -177,7 +180,7 @@ sub _flush_buffer {
 
     $self->{_log_size} = scalar(@log_data);
 
-    unlink $old_file or die "$old_file: unlink failed: $!";
+    xunlink $old_file;
     undef $old_lock;
 }
 
@@ -230,7 +233,7 @@ sub load {
             my @data_to_save = map { $_->[1] } @$buffer;
 
             $self->save(\@data_to_save);
-            unlink $file or die "$file: unlink failed: $!";
+            xunlink $file;
             next;
         }
         else {
@@ -254,10 +257,11 @@ sub delete {
     for my $id (@$ids) {
         die "There is unknown id $id" unless $state->{$id};
         delete $state->{$id};
-        print $fh "$id\t-\tundef\n"; #TODO: maybe some assertions
+        print $fh "$id\t-\tundef\n";
     }
     xclose $fh;
     $self->{_items_size} -= @$ids;
+    $self->{_log_size} += @$ids;
 }
 
 sub lag {

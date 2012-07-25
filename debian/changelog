@@ -1,3 +1,9 @@
+libstream-more-perl (0.13.6) unstable; urgency=low
+
+  * Stream::Buffer::File: more tests written, some fixes
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Wed, 25 Jul 2012 13:03:58 +0400
+
 libstream-more-perl (0.13.5) unstable; urgency=low
 
   * Stream::Buffer::File written

@@ -53,6 +53,7 @@ sub new {
         dir => 1,
         max_chunk_size => 0,
         max_chunk_count => 0,
+        max_log_size => 0,
         buffer_class => { default => 'Stream::Buffer::SQLite' },
     });
     my $self = {};

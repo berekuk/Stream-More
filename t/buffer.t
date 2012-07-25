@@ -240,6 +240,29 @@ sub unlink_lockf_race :Tests {
     }
 }
 
-#__PACKAGE__->new(buffer_class => 'Stream::Buffer::Persistent')->runtests;
-#__PACKAGE__->new(buffer_class => 'Stream::Buffer::SQLite')->runtests;
+sub buffer_file :Tests {
+    my $self = shift;
+    return unless $self->{buffer_options}->{buffer_class} eq 'Stream::Buffer::File';
+    
+    my $in = array_in(['a' .. 'z']);
+    my $mq = $self->_buffer($in, { max_chunk_size => 2, max_log_size => 4 });
+    my $item = $mq->read();
+    $mq->commit([$item->[0]]);
+    $item = $mq->read();
+    $mq->commit([$item->[0]]);
+    $item = $mq->read();
+    $item = $mq->read();
+    is(int(xqx("ls tfiles/ | wc -l")), 1, "one log file after flush");
+    like(xqx("ls tfiles/"), qr/\.1\./, "and it's new");
+    undef $mq;
+
+    $mq = $self->_buffer($in);
+    $item = $mq->read();
+    is($item->[1], "c");
+    $item = $mq->read();
+    is($item->[1], "d");
+}
+
+__PACKAGE__->new(buffer_class => 'Stream::Buffer::Persistent')->runtests;
+__PACKAGE__->new(buffer_class => 'Stream::Buffer::SQLite')->runtests;
 __PACKAGE__->new(buffer_class => 'Stream::Buffer::File')->runtests;
