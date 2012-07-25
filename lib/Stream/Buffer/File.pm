@@ -1,5 +1,7 @@
 package Stream::Buffer::File;
 
+# ABSTRACT: ulitily class to store uncommited data in a local file buffers
+
 use namespace::autoclean;
 
 use Moose;
@@ -11,6 +13,8 @@ use Yandex::Logger;
 use Yandex::X qw(xopen xclose xunlink);
 use Yandex::Lockf 3.0.0;
 
+use Stream::File;
+
 =head1 DESCRIPTION
 
 This is a simple files-based buffer implementation.
@@ -18,23 +22,6 @@ This is a simple files-based buffer implementation.
 =cut
 
 my $counter = 0;
-
-sub _lockf {
-    my ($file, $opts) = @_;
-    while () {
-        my $lockf = lockf($file, $opts);
-        return $lockf unless $lockf;
-        unless (-e $file) {
-            DEBUG "$file: locked but removed";
-            next;
-        }
-        unless ((stat $lockf->{_fh})[1] eq (stat $file)[1]) {
-            DEBUG "$file: locked but removed and created back";
-            next;
-        }
-        return $lockf;
-    }
-}
 
 has 'dir' => (
     is => 'ro',
@@ -77,7 +64,7 @@ sub _find_buffer {
     $self->{_chunk_count} = scalar(@files);
 
     for my $file (@files) {
-        my $lockf = _lockf($file, { blocking => 0 });
+        my $lockf = lockf($file, { blocking => 0 });
         next unless $lockf;
         DEBUG "$file: found and locked";
         return ($lockf, $file);
@@ -92,8 +79,7 @@ sub _dump_file {
     my $fh = xopen '<', $file;
     my $log_size = 0;
     while (my $l = <$fh>) {
-        chomp $l;
-        if ($l =~ m{^(\d+)\t([\+\-])\t(.+)$}) {
+        if ($l =~ m{^(\d+)\t([\+\-])\t(.+\n)}) {
             my ($id, $type, $cur_data) = ($1, $2, $3);
             if ($type eq "+") {
                 die "There is already an element with same id, file $file, line $l" if $state->{$id};
@@ -124,7 +110,7 @@ sub _create_buffer {
         die "Chunk limit exceeded: $self->{dir}" if $self->{max_chunk_count} and $self->{_chunk_count} >= $self->{max_chunk_count};
         while () {
             $file = "$self->{dir}/" . time . ".$$." . $counter++ . ".log";
-            $lockf = _lockf($file, { blocking => 0 });
+            $lockf = lockf($file, { blocking => 0 });
             unless ($lockf) {
                 DEBUG "$file: created but stolen";
                 next;
@@ -157,7 +143,7 @@ sub _flush_buffer {
     my ($file, $lockf);
     while () {
         $file = "$self->{dir}/" . time . ".$$." . $counter++ . ".log";
-        $lockf = _lockf($file, { blocking => 0 });
+        $lockf = lockf($file, { blocking => 0 });
         unless ($lockf) {
             DEBUG "$file: created but stolen";
             next;
@@ -172,11 +158,11 @@ sub _flush_buffer {
     my $state = $self->{_state};
     my @log_data = map { [ $_ => $state->{$_} ] } sort {$a <=> $b} keys %$state;
     
-    my $fh = xopen '>', $file;
+    my $stream = Stream::File->new($self->{_file}, { lock => 0 });
     for my $item (@log_data) {
-        print $fh $item->[0] . "\t+\t" . $item->[1] . "\n";
+        $stream->write($item->[0] . "\t+\t" . $item->[1]);
     }
-    xclose $fh;
+    $stream->commit();
 
     $self->{_log_size} = scalar(@log_data);
 
@@ -200,15 +186,17 @@ sub save {
     die "Chunk size is good, but still log size if big, very very strange" if $self->{_log_size} + $chunk_size > $self->{max_log_size};
 
     my $state = $self->{_state};
-    my $fh = xopen '>>', $self->{_file};
+
+    my $stream = Stream::File->new($self->{_file}, { lock => 0 });
     for my $data (@$chunk) {
+        die "Incorrect data format, must be [^\\n]+\\n" unless $data =~ m{^[^\n]+\n$};
         my $id = $self->_id;
         die "There is already an element with id $id" if $state->{$id};
         $state->{$id} = $data;
         push @{$self->{_buffer}}, [$id => $data];
-        print $fh $id . "\t+\t" . $data . "\n";
+        $stream->write("$id\t+\t$data");
     }
-    xclose $fh;
+    $stream->commit();
 
     $self->{_log_size} += @$chunk;
     $self->{_items_size} += @$chunk;
@@ -253,13 +241,14 @@ sub delete {
     $self->_flush_buffer if scalar(@$ids) + $self->{_log_size} > $self->{max_log_size};
     
     my $state = $self->{_state};
-    my $fh = xopen '>>', $self->{_file};
+    my $stream = Stream::File->new($self->{_file}, { lock => 0 });
     for my $id (@$ids) {
         die "There is unknown id $id" unless $state->{$id};
         delete $state->{$id};
-        print $fh "$id\t-\tundef\n";
+        $stream->write("$id\t-\tundef\n");
     }
-    xclose $fh;
+    $stream->commit();
+    
     $self->{_items_size} -= @$ids;
     $self->{_log_size} += @$ids;
 }

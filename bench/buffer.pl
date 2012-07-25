@@ -16,7 +16,7 @@ my $gen_sub = sub {
 
     return sub {
         mkdir 'tfiles/buffer';
-        my $in = array_in([1 .. 1000]);
+        my $in = array_in([map {$_ . "\n"} (1 .. 1000)]);
         my $mq = Stream::In::Buffer->new($in, { dir => "tfiles/buffer", buffer_class => $class });
 
         my @out;
