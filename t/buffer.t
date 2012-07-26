@@ -259,8 +259,19 @@ sub buffer_file :Tests {
     $mq = $self->_buffer($in);
     $item = $mq->read();
     is($item->[1], "c\n");
+    $mq->commit([$item->[0]]);
+
+    my @files = glob("tfiles/*.log");
+    my $fh = xopen '>>', $files[0];
+    print $fh "broken line";
+    xclose $fh;
+
+    undef $mq;
+    $mq = $self->_buffer($in);
     $item = $mq->read();
     is($item->[1], "d\n");
+    $item = $mq->read();
+    is($item->[1], "e\n", "broken line already removed");
 }
 
 __PACKAGE__->new(buffer_class => 'Stream::Buffer::Persistent')->runtests;

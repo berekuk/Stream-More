@@ -74,8 +74,13 @@ sub _find_buffer {
 
 sub _dump_file {
     my $self = shift;
-    my ($file, $buffer, $state) = @_;
+    my ($file, $buffer, $state, $stream_file) = @_;
     
+    unless ($stream_file) {
+        $stream_file = Stream::File->new($file, { lock => 0 });
+        $stream_file->_open;
+    }
+
     my $fh = xopen '<', $file;
     my $log_size = 0;
     while (my $l = <$fh>) {
@@ -122,10 +127,12 @@ sub _create_buffer {
 
     $self->{_lockf} = $lockf;
     $self->{_file} = $file;
+    $self->{_stream_file} = Stream::File->new($self->{_file}, { lock => 0 });
+    $self->{_stream_file}->_open;
 
     $self->{_buffer} = [];
     $self->{_state} = {};
-    $self->{_log_size} = $self->_dump_file($file, $self->{_buffer}, $self->{_state});
+    $self->{_log_size} = $self->_dump_file($file, $self->{_buffer}, $self->{_state}, $self->{_stream_file});
 
     $self->{_id} = $self->{_buffer}->[-1]->[0] + 1 if @{$self->{_buffer}};
     $self->{_id} ||= 0;
@@ -154,11 +161,14 @@ sub _flush_buffer {
     
     $self->{_lockf} = $lockf;
     $self->{_file} = $file;
+    $self->{_stream_file} = Stream::File->new($self->{_file}, { lock => 0 });
+    $self->{_stream_file}->_open;
 
     my $state = $self->{_state};
     my @log_data = map { [ $_ => $state->{$_} ] } sort {$a <=> $b} keys %$state;
     
-    my $stream = Stream::File->new($self->{_file}, { lock => 0 });
+    my $stream = $self->{_stream_file};
+
     for my $item (@log_data) {
         $stream->write($item->[0] . "\t+\t" . $item->[1]);
     }
@@ -187,7 +197,7 @@ sub save {
 
     my $state = $self->{_state};
 
-    my $stream = Stream::File->new($self->{_file}, { lock => 0 });
+    my $stream = $self->{_stream_file};
     for my $data (@$chunk) {
         die "Incorrect data format, must be [^\\n]+\\n" unless $data =~ m{^[^\n]+\n$};
         my $id = $self->_id;
@@ -241,7 +251,7 @@ sub delete {
     $self->_flush_buffer if scalar(@$ids) + $self->{_log_size} > $self->{max_log_size};
     
     my $state = $self->{_state};
-    my $stream = Stream::File->new($self->{_file}, { lock => 0 });
+    my $stream = $self->{_stream_file};
     for my $id (@$ids) {
         die "There is unknown id $id" unless $state->{$id};
         delete $state->{$id};

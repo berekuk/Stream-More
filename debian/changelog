@@ -1,3 +1,10 @@
+libstream-more-perl (0.13.8) unstable; urgency=low
+
+  * Stream::Buffer::File: don't create Stream::File many times, truncate after
+    creating
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Thu, 26 Jul 2012 14:16:22 +0400
+
 libstream-more-perl (0.13.7) unstable; urgency=low
 
   * Stream::Buffer::File: rewrote with some fixes 
