@@ -54,7 +54,8 @@ sub BUILD {
 sub DEMOLISH {
     local $@;
     my $self = shift;
-    xunlink $self->{_file} if $self->{_file} and defined $self->{_state} and scalar(keys %{$self->{_state}}) == 0;
+    my $file = $self->{_stream_file}->file if $self->{_stream_file};
+    xunlink $file if $file and defined $self->{_state} and scalar(keys %{$self->{_state}}) == 0;
 }
 
 sub _find_buffer {
@@ -67,20 +68,18 @@ sub _find_buffer {
         my $lockf = lockf($file, { blocking => 0 });
         next unless $lockf;
         DEBUG "$file: found and locked";
-        return ($lockf, $file);
+        my $stream_file = Stream::File->new($file, { lock => 0 });
+        $stream_file->_open;
+        return ($lockf, $stream_file);
     }
     return;
 }
 
 sub _dump_file {
     my $self = shift;
-    my ($file, $buffer, $state, $stream_file) = @_;
+    my ($buffer, $state, $stream_file) = @_;
     
-    unless ($stream_file) {
-        $stream_file = Stream::File->new($file, { lock => 0 });
-        $stream_file->_open;
-    }
-
+    my $file = $stream_file->file;
     my $fh = xopen '<', $file;
     my $log_size = 0;
     while (my $l = <$fh>) {
@@ -109,9 +108,10 @@ sub _dump_file {
 sub _create_buffer {
     my $self = shift;
 
-    my ($lockf, $file) = $self->_find_buffer();
+    my ($lockf, $stream_file) = $self->_find_buffer();
 
-    unless ($file) {
+    unless ($stream_file) {
+        my $file;
         die "Chunk limit exceeded: $self->{dir}" if $self->{max_chunk_count} and $self->{_chunk_count} >= $self->{max_chunk_count};
         while () {
             $file = "$self->{dir}/" . time . ".$$." . $counter++ . ".log";
@@ -121,18 +121,19 @@ sub _create_buffer {
                 next;
             }
             DEBUG "$file: created and locked";
+            
+            $stream_file = Stream::File->new($file, { lock => 0 });
+            $stream_file->_open;
             last;
         }
     }
 
     $self->{_lockf} = $lockf;
-    $self->{_file} = $file;
-    $self->{_stream_file} = Stream::File->new($self->{_file}, { lock => 0 });
-    $self->{_stream_file}->_open;
+    $self->{_stream_file} = $stream_file;
 
     $self->{_buffer} = [];
     $self->{_state} = {};
-    $self->{_log_size} = $self->_dump_file($file, $self->{_buffer}, $self->{_state}, $self->{_stream_file});
+    $self->{_log_size} = $self->_dump_file($self->{_buffer}, $self->{_state}, $self->{_stream_file});
 
     $self->{_id} = $self->{_buffer}->[-1]->[0] + 1 if @{$self->{_buffer}};
     $self->{_id} ||= 0;
@@ -144,7 +145,7 @@ sub _flush_buffer {
     my $self = shift;
 
     my $old_lock = $self->{_lockf};
-    my $old_file = $self->{_file};
+    my $old_file = $self->{_stream_file}->file;
         
     DEBUG "Log size exceeded, creating new log file";
     my ($file, $lockf);
@@ -160,19 +161,18 @@ sub _flush_buffer {
     }
     
     $self->{_lockf} = $lockf;
-    $self->{_file} = $file;
-    $self->{_stream_file} = Stream::File->new($self->{_file}, { lock => 0 });
+    $self->{_stream_file} = Stream::File->new($file, { lock => 0 });
     $self->{_stream_file}->_open;
 
     my $state = $self->{_state};
     my @log_data = map { [ $_ => $state->{$_} ] } sort {$a <=> $b} keys %$state;
     
-    my $stream = $self->{_stream_file};
+    my $stream_file = $self->{_stream_file};
 
     for my $item (@log_data) {
-        $stream->write($item->[0] . "\t+\t" . $item->[1]);
+        $stream_file->write($item->[0] . "\t+\t" . $item->[1]);
     }
-    $stream->commit();
+    $stream_file->commit();
 
     $self->{_log_size} = scalar(@log_data);
 
@@ -190,23 +190,23 @@ sub save {
     my ($chunk) = @_;
     my $chunk_size = @$chunk;
 
-    die "Chunk size exceeded: $self->{_file}" if $self->{max_chunk_size} and $self->{_items_size} + $chunk_size > $self->{max_chunk_size};
+    die "Chunk size exceeded: " . $self->{_stream_file}->file if $self->{max_chunk_size} and $self->{_items_size} + $chunk_size > $self->{max_chunk_size};
 
     $self->_flush_buffer if $self->{_log_size} + $chunk_size > $self->{max_log_size};
     die "Chunk size is good, but still log size if big, very very strange" if $self->{_log_size} + $chunk_size > $self->{max_log_size};
 
     my $state = $self->{_state};
 
-    my $stream = $self->{_stream_file};
+    my $stream_file = $self->{_stream_file};
     for my $data (@$chunk) {
         die "Incorrect data format, must be [^\\n]+\\n" unless $data =~ m{^[^\n]+\n$};
         my $id = $self->_id;
         die "There is already an element with id $id" if $state->{$id};
         $state->{$id} = $data;
         push @{$self->{_buffer}}, [$id => $data];
-        $stream->write("$id\t+\t$data");
+        $stream_file->write("$id\t+\t$data");
     }
-    $stream->commit();
+    $stream_file->commit();
 
     $self->{_log_size} += @$chunk;
     $self->{_items_size} += @$chunk;
@@ -221,16 +221,18 @@ sub load {
 
     while () {
         unless (@{$self->{_buffer}}) {
-            my ($lockf, $file) = $self->_find_buffer();
-            last unless $file;
+            my ($lockf, $stream_file) = $self->_find_buffer();
+            last unless $stream_file;
 
+            my $file = $stream_file->file;
             my $buffer = [];
             my $temp = {};
-            $self->_dump_file($file, $buffer, $temp);
+            $self->_dump_file($buffer, $temp, $stream_file);
 
             my @data_to_save = map { $_->[1] } @$buffer;
 
             $self->save(\@data_to_save);
+            undef $stream_file;
             xunlink $file;
             next;
         }
@@ -251,13 +253,13 @@ sub delete {
     $self->_flush_buffer if scalar(@$ids) + $self->{_log_size} > $self->{max_log_size};
     
     my $state = $self->{_state};
-    my $stream = $self->{_stream_file};
+    my $stream_file = $self->{_stream_file};
     for my $id (@$ids) {
         die "There is unknown id $id" unless $state->{$id};
         delete $state->{$id};
-        $stream->write("$id\t-\tundef\n");
+        $stream_file->write("$id\t-\tundef\n");
     }
-    $stream->commit();
+    $stream_file->commit();
     
     $self->{_items_size} -= @$ids;
     $self->{_log_size} += @$ids;
