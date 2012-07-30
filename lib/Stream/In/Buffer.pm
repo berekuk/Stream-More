@@ -17,6 +17,7 @@ use Params::Validate qw(:all);
 use Yandex::Logger;
 use Stream::Buffer::SQLite;
 use Stream::Buffer::Persistent;
+use Stream::Buffer::File;
 
 =head1 SYNOPSIS
 
@@ -52,7 +53,8 @@ sub new {
         dir => 1,
         max_chunk_size => 0,
         max_chunk_count => 0,
-        buffer_class => { default => 'Stream::Buffer::SQLite' },
+        max_log_size => 0,
+        buffer_class => { default => 'Stream::Buffer::File' },
     });
     my $self = {};
     bless $self => $class;

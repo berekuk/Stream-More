@@ -1,3 +1,40 @@
+libstream-more-perl (0.13.11) unstable; urgency=low
+
+  * Stream::Buffer::File: max_log_size = 10 * max_chunk_size
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Mon, 30 Jul 2012 16:05:22 +0400
+
+libstream-more-perl (0.13.10) unstable; urgency=low
+
+  * Stream::In::Buffer: now Stream::Buffer::File is default buffer class
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Mon, 30 Jul 2012 15:50:33 +0400
+
+libstream-more-perl (0.13.9) unstable; urgency=low
+
+  * Stream::Buffer::File: get filename from Stream::File object
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Thu, 26 Jul 2012 15:09:11 +0400
+
+libstream-more-perl (0.13.8) unstable; urgency=low
+
+  * Stream::Buffer::File: don't create Stream::File many times, truncate after
+    creating
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Thu, 26 Jul 2012 14:16:22 +0400
+
+libstream-more-perl (0.13.7) unstable; urgency=low
+
+  * Stream::Buffer::File: rewrote with some fixes 
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Wed, 25 Jul 2012 18:49:48 +0400
+
+libstream-more-perl (0.13.6) unstable; urgency=low
+
+  * Stream::Buffer::File: initial release
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Wed, 25 Jul 2012 13:03:58 +0400
+
 libstream-more-perl (0.13.5) unstable; urgency=low
 
   * switch_out simple ->> for simplifying Multiplex->new([filter({ check(...)

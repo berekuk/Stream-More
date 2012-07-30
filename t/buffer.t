@@ -42,24 +42,24 @@ sub setup :Test(setup) {
 sub simple :Tests {
     my $self = shift;
 
-    my $in = array_in(["a" .. "z"]);
+    my $in = array_in([map {$_ . "\n"} ('a' .. 'z')]);
     my $mq = $self->_buffer($in);
 
     my $items = $mq->read_chunk(3);
-    cmp_deeply($items, [ [ignore(), "a"], [ignore(), "b"], [ignore(), "c"] ]);
+    cmp_deeply($items, [ [ignore(), "a\n"], [ignore(), "b\n"], [ignore(), "c\n"] ]);
 
     $mq->commit([$items->[0]->[0], $items->[2]->[0]]);
     undef $mq;
 
     $mq = $self->_buffer($in);
     $items = $mq->read_chunk(2);
-    cmp_deeply($items, [ [ignore(), "b"], [ignore(), "d"] ]);
+    cmp_deeply($items, [ [ignore(), "b\n"], [ignore(), "d\n"] ]);
 }
 
 sub id :Tests {
     my $self = shift;
 
-    my $in = array_in(["a" .. "z"]);
+    my $in = array_in([map {$_ . "\n"} ('a' .. 'z')]);
     my $mq = $self->_buffer($in);
 
     $mq->read();
@@ -86,7 +86,7 @@ sub id :Tests {
 sub lazy :Tests {
     my $self = shift;
 
-    my $arr = ["a" .. "z"];
+    my $arr = [map {$_ . "\n"} ('a' .. 'z')];
     my $in = array_in($arr);
     my $mq = $self->_buffer($in);
 
@@ -105,7 +105,7 @@ sub lazy :Tests {
 sub size :Tests {
     my $self = shift;
 
-    my $in = array_in(["a" .. "z"]);
+    my $in = array_in([map {$_ . "\n"} ('a' .. 'z')]);
     my $mq = $self->_buffer($in, { max_chunk_size => 4 });
     my $items = $mq->read_chunk(3);
     $mq->commit([map {$_->[0]} @$items]);
@@ -116,7 +116,7 @@ sub size :Tests {
 sub lag :Tests {
     my $self = shift;
 
-    my $in = array_in(["a" .. "z"]);
+    my $in = array_in([map {$_ . "\n"} ('a' .. 'z')]);
     my $mq = $self->_buffer($in);
 
     is($mq->lag(), 26);
@@ -126,15 +126,15 @@ sub lag :Tests {
 
     undef $mq; #FIXME: sum lags in all chunks!
     $mq = $self->_buffer($in);
-    is($mq->lag(), 21);
+    is($mq->lag(), 26);
     $items = $mq->read_chunk(10);
     cmp_ok($mq->lag(), ">=", 11);
 }
 
 sub concurrent :Tests {
     my $self = shift;
-
-    my $in = array_in(["a" .. "z"]);
+    
+    my $in = array_in([map {$_ . "\n"} ('a' .. 'z')]);
 
     my $mq1 = $self->_buffer($in);
     my $mq2 = $self->_buffer($in);
@@ -152,7 +152,7 @@ sub concurrent :Tests {
     push @$items, @{$mq1->read_chunk(4)};
     push @$items, @{$mq2->read_chunk(4)};
 
-    cmp_deeply([map { $_->[1] } @$items], bag("a" .. "h"));
+    cmp_deeply([map { $_->[1] } @$items], bag(map {$_ . "\n"} ("a" .. "h")));
 
     like(exception { $self->_buffer($in, { max_chunk_count => 2 }) }, qr/limit exceeded/);
 }
@@ -160,22 +160,22 @@ sub concurrent :Tests {
 sub read_chunk :Tests {
     my $self = shift;
 
-    my $in = array_in(["a", "b"]);
+    my $in = array_in([map {$_ . "\n"} ('a' .. 'b')]);
     my $mq = $self->_buffer($in);
 
-    cmp_deeply($mq->read_chunk(3), [[ ignore(), "a" ], [ ignore(), "b" ]]);
+    cmp_deeply($mq->read_chunk(3), [[ ignore(), "a\n" ], [ ignore(), "b\n" ]]);
     is($mq->read_chunk(2), undef); # not []!
 }
 
 sub buffers :Tests {
     my $self = shift;
 
-    my $in = array_in(["a" .. "z"]);
+    my $in = array_in([map {$_ . "\n"} ('a' .. 'z')]);
 
     my @mq = map { $self->_buffer($in) } (1 .. 4);
     $_->read_chunk(2) for @mq;
     undef @mq;
-
+    
     my $mq1 = $self->_buffer($in);
     my $mq2 = $self->_buffer($in);
 
@@ -185,7 +185,7 @@ sub buffers :Tests {
     is({ map { ($_->[1] => 1) } @$items1 }->{"i"}, undef, "switch to another unlocked buffer");
 
     push @$items2, @{$mq2->read_chunk(4)};
-    cmp_deeply([map { $_->[1] } @$items1, @$items2], bag("a" .. "j"), "all pending buffers fetched");
+    cmp_deeply([map { $_->[1] } @$items1, @$items2], bag(map {$_ . "\n"} ("a" .. "j")), "all pending buffers fetched");
 
     $mq2->commit([map { $_->[0] } @$items2]);
     undef $mq1;
@@ -197,23 +197,23 @@ sub buffers :Tests {
 sub commit :Tests {
     my $self = shift;
 
-    my $in = array_in(["a" .. "z"]);
+    my $in = array_in([map {$_ . "\n"} ('a' .. 'z')]);
 
     my $mq = $self->_buffer($in);
     my $item = $mq->read();
-    is($item->[1], "a");
+    is($item->[1], "a\n");
     $mq->commit([$item->[0]]);
     undef $mq;
 
     $mq = $self->_buffer($in);
     $item = $mq->read();
-    is($item->[1], "b");
+    is($item->[1], "b\n");
     $mq->commit();
     undef $mq;
 
     $mq = $self->_buffer($in);
     $item = $mq->read();
-    is($item->[1], "b");
+    is($item->[1], "b\n");
     like(exception { $mq->commit([42]) }, qr/unknown id/);
 }
 
@@ -222,7 +222,7 @@ sub unlink_lockf_race :Tests {
 
     for (1..5) {
         xfork and next;
-        my $in = array_in(["a" .. "z"]);
+        my $in = array_in([map {$_ . "\n"} ('a' .. 'z')]);
         eval {
             for (0..100) {
                 my $mq = $self->_buffer($in);
@@ -240,5 +240,40 @@ sub unlink_lockf_race :Tests {
     }
 }
 
+sub buffer_file :Tests {
+    my $self = shift;
+    return unless $self->{buffer_options}->{buffer_class} eq 'Stream::Buffer::File';
+    
+    my $in = array_in([map {$_ . "\n"} ('a' .. 'z')]);
+    my $mq = $self->_buffer($in, { max_chunk_size => 2, max_log_size => 4 });
+    my $item = $mq->read();
+    $mq->commit([$item->[0]]);
+    $item = $mq->read();
+    $mq->commit([$item->[0]]);
+    $item = $mq->read();
+    $item = $mq->read();
+    is(int(xqx("ls tfiles/ | wc -l")), 1, "one log file after flush");
+    like(xqx("ls tfiles/"), qr/\.1\./, "and it's new");
+    undef $mq;
+
+    $mq = $self->_buffer($in);
+    $item = $mq->read();
+    is($item->[1], "c\n");
+    $mq->commit([$item->[0]]);
+
+    my @files = glob("tfiles/*.log");
+    my $fh = xopen '>>', $files[0];
+    print $fh "broken line";
+    xclose $fh;
+
+    undef $mq;
+    $mq = $self->_buffer($in);
+    $item = $mq->read();
+    is($item->[1], "d\n");
+    $item = $mq->read();
+    is($item->[1], "e\n", "broken line already removed");
+}
+
 __PACKAGE__->new(buffer_class => 'Stream::Buffer::Persistent')->runtests;
 __PACKAGE__->new(buffer_class => 'Stream::Buffer::SQLite')->runtests;
+__PACKAGE__->new(buffer_class => 'Stream::Buffer::File')->runtests;
