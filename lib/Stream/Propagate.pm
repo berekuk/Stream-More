@@ -25,7 +25,7 @@ This is a client class for new HTTP stream acceptor service called C<stream-acce
 
 =cut
 
-use parent qw(Stream::Out);
+use parent qw(Stream::Out Stream::Storage::Role::Occupancy);
 use Params::Validate qw(:all);
 use LWP::UserAgent;
 use HTTP::Request::Common;
@@ -98,6 +98,26 @@ sub new {
 
     $self->{filter} = $format2filter{$self->{format}} or die "invalid format '$self->{format}'";
     return bless $self => $class;
+}
+
+=item B<< occupancy() >>
+
+Ask stream-accept for occupancy of target stream.
+
+=cut
+sub occupancy {
+    my $self = shift;
+
+    my $uri = URI->new($self->{endpoint});
+    $uri->path('status');
+    $uri->query_form( name => $self->{name} );
+
+    my $response = $self->{ua}->request(GET $uri->as_string);
+    unless ($response->is_success) {
+        croak "Checking status of $self->{name} at $self->{endpoint} failed: ".$response->status_line;
+    }
+
+    return $response->content;
 }
 
 =item B<< write() >>
