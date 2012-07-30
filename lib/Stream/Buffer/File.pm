@@ -37,7 +37,11 @@ has 'max_chunk_size' => (
 has 'max_log_size' => (
     is => 'ro',
     isa => 'Int',
-    default => 10000,
+    lazy => 1,
+    default => sub {
+        my $self = shift;
+        return $self->max_chunk_size * 10;
+    },
 );
 
 has 'max_chunk_count' => (
@@ -112,7 +116,7 @@ sub _create_buffer {
 
     unless ($stream_file) {
         my $file;
-        die "Chunk limit exceeded: $self->{dir}" if $self->{max_chunk_count} and $self->{_chunk_count} >= $self->{max_chunk_count};
+        die "Chunk limit exceeded: $self->{dir}" if $self->max_chunk_count and $self->{_chunk_count} >= $self->max_chunk_count;
         while () {
             $file = "$self->{dir}/" . time . ".$$." . $counter++ . ".log";
             $lockf = lockf($file, { blocking => 0 });
@@ -190,10 +194,10 @@ sub save {
     my ($chunk) = @_;
     my $chunk_size = @$chunk;
 
-    die "Chunk size exceeded: " . $self->{_stream_file}->file if $self->{max_chunk_size} and $self->{_items_size} + $chunk_size > $self->{max_chunk_size};
+    die "Chunk size exceeded: " . $self->{_stream_file}->file if $self->max_chunk_size and $self->{_items_size} + $chunk_size > $self->max_chunk_size;
 
-    $self->_flush_buffer if $self->{_log_size} + $chunk_size > $self->{max_log_size};
-    die "Chunk size is good, but still log size if big, very very strange" if $self->{_log_size} + $chunk_size > $self->{max_log_size};
+    $self->_flush_buffer if $self->{_log_size} + $chunk_size > $self->max_log_size;
+    die "Chunk size is good, but still log size if big, very very strange" if $self->{_log_size} + $chunk_size > $self->max_log_size;
 
     my $state = $self->{_state};
 
@@ -250,7 +254,7 @@ sub delete {
     my $self = shift;
     my ($ids) = @_;
 
-    $self->_flush_buffer if scalar(@$ids) + $self->{_log_size} > $self->{max_log_size};
+    $self->_flush_buffer if scalar(@$ids) + $self->{_log_size} > $self->max_log_size;
     
     my $state = $self->{_state};
     my $stream_file = $self->{_stream_file};
