@@ -1,3 +1,9 @@
+libstream-more-perl (0.13.10) unstable; urgency=low
+
+  * Stream::In::Buffer: now Stream::Buffer::File is default buffer class
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Mon, 30 Jul 2012 15:50:33 +0400
+
 libstream-more-perl (0.13.9) unstable; urgency=low
 
   * Stream::Buffer::File: get filename from Stream::File object
