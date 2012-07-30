@@ -348,7 +348,7 @@ sub gc {
 
         my $abs_file = "$self->{dir}/$file";
 
-        if ($file =~ /^tmpchunk/ or $file =~ /^yandex\.tmp\./) {
+        if ($file =~ /^\d+\.tmp\./) {
             my $ctime = (stat $abs_file)[10];
             next unless $ctime; # tmp file already disappeared
             my $age = time - $ctime;

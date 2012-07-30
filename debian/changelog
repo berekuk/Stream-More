@@ -1,3 +1,9 @@
+libstream-more-perl (0.13.12) unstable; urgency=low
+
+  * DiskBuffer race fixed again
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Mon, 30 Jul 2012 19:27:37 +0400
+
 libstream-more-perl (0.13.11) unstable; urgency=low
 
   * Stream::Buffer::File: max_log_size = 10 * max_chunk_size
