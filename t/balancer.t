@@ -113,7 +113,7 @@ sub invalid: Tests {
 
     my $targets_count = 100;
     my $targets = [map {mock_obj()} (0..$targets_count)];
-    my $balancer_norm = Stream::Out::Balancer->new($targets);
+    my $balancer_norm = Stream::Out::Balancer->new($targets, { normal_distribution => 1 });
     my $balancer_rand = Stream::Out::Balancer->new($targets, { normal_distribution => 0 });
 
     my $is_invalid = 0;
@@ -129,5 +129,30 @@ sub invalid: Tests {
     is( $is_invalid + $is_recovered, 2, 'invalid item set and recovered - norm ' );
 }
 
+sub three_storage: Test {
+    set_step(5);
+
+    my $targets = [ map { mock_obj() } (1..3) ];
+    $targets->[0]->{buffer} = 1000;
+    $targets->[1]->{buffer} = 1000;
+    $targets->[2]->{buffer} = 100;
+
+    my $balancer = Stream::Out::Balancer->new($targets, { cache_period => 1 });
+
+    for (1 .. 6) {
+        $balancer->write_chunk([1 .. 100]);
+
+        $targets->[0]->{buffer} -= 30;
+        $targets->[1]->{buffer} -= 60;
+        $targets->[2]->{buffer} -= 0;  # just to say it is broken
+    }
+
+    TODO: {
+        local $TODO = "actually we want to take account of what is going on with target storage, not only static occupancy value, but also the way of increasing or not.";
+        is($targets->[2]->{buffer}, 100, 'not put into broken');
+    }
+
+    #print join(', ', map { $_->occupancy } @$targets);
+}
 
 __PACKAGE__->new->runtests;
