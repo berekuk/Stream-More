@@ -58,7 +58,8 @@ sub BUILD {
 sub DEMOLISH {
     local $@;
     my $self = shift;
-    my $file = $self->{_stream_file}->file if $self->{_stream_file};
+    my $file;
+    $file = $self->{_stream_file}->file if $self->{_stream_file};
     xunlink $file if $file and defined $self->{_state} and scalar(keys %{$self->{_state}}) == 0;
 }
 
