@@ -1,3 +1,192 @@
+libstream-more-perl (0.13.11) unstable; urgency=low
+
+  * Stream::Buffer::File: max_log_size = 10 * max_chunk_size
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Mon, 30 Jul 2012 16:05:22 +0400
+
+libstream-more-perl (0.13.10) unstable; urgency=low
+
+  * Stream::In::Buffer: now Stream::Buffer::File is default buffer class
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Mon, 30 Jul 2012 15:50:33 +0400
+
+libstream-more-perl (0.13.9) unstable; urgency=low
+
+  * Stream::Buffer::File: get filename from Stream::File object
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Thu, 26 Jul 2012 15:09:11 +0400
+
+libstream-more-perl (0.13.8) unstable; urgency=low
+
+  * Stream::Buffer::File: don't create Stream::File many times, truncate after
+    creating
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Thu, 26 Jul 2012 14:16:22 +0400
+
+libstream-more-perl (0.13.7) unstable; urgency=low
+
+  * Stream::Buffer::File: rewrote with some fixes 
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Wed, 25 Jul 2012 18:49:48 +0400
+
+libstream-more-perl (0.13.6) unstable; urgency=low
+
+  * Stream::Buffer::File: initial release
+
+ -- Stepan Artamonov <swatmad@yandex-team.ru>  Wed, 25 Jul 2012 13:03:58 +0400
+
+libstream-more-perl (0.13.5) unstable; urgency=low
+
+  * switch_out simple ->> for simplifying Multiplex->new([filter({ check(...)
+    })]) constructions
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Wed, 18 Jul 2012 13:08:24 +0400
+
+libstream-more-perl (0.13.4) unstable; urgency=low
+
+  * DiskBuffer: fix read-only mode
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Mon, 09 Jul 2012 18:41:21 +0400
+
+libstream-more-perl (0.13.3) unstable; urgency=low
+
+  * fix DiskBuffer race leading to premature end-of-data 
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Mon, 09 Jul 2012 18:13:13 +0400
+
+libstream-more-perl (0.13.2) unstable; urgency=low
+
+  * fix RoundRobin buffer => 0 mode 
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Fri, 06 Jul 2012 13:06:41 +0400
+
+libstream-more-perl (0.13.1) unstable; urgency=low
+
+  [ nikita ]
+  * Stream::Filter::Coro : fix memory leaks
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Thu, 05 Jul 2012 17:54:17 +0400
+
+libstream-more-perl (0.13.0) unstable; urgency=low
+
+  [ Vyacheslav Matjukhin (No comments) ]
+  * Stream::Buffer::Persistent - SQLite buffer alternative
+  * common Stream::Buffer::Role role
+  * refactor buffers API a bit (save() is more straightforward)
+
+  [ Andrei Mishchenko ]
+  * Stream::Buffer::SQLite - turn off auto fsync 
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Wed, 04 Jul 2012 15:13:11 +0400
+
+libstream-more-perl (0.12.1) unstable; urgency=low
+
+  * DiskBuffer: more fixes
+   - actually do cleanup
+   - fix tmp files garbage-collecting (don't fail if tmp file got removed
+   while we checked its age)
+   - fix races in chunk removing logic
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Fri, 29 Jun 2012 17:18:34 +0400
+
+libstream-more-perl (0.12.0) unstable; urgency=low
+
+  * take read lock in DiskBuffer by default
+    (Queue and RoundRobin disable this option for the sake of performance)
+  * fix lag() race condition in DiskBuffer
+  * optimize RoundRobin ->in() method (this change speeds up everything,
+    especially ->commit())
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Tue, 26 Jun 2012 15:32:02 +0400
+
+libstream-more-perl (0.11.8) unstable; urgency=low
+
+  * RoundRobin improvements:
+   - fix duplicate reads
+   - fix initialization races
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Thu, 21 Jun 2012 21:16:30 +0400
+
+libstream-more-perl (0.11.7) unstable; urgency=low
+
+  * fixed unlink/lockf race in Buffer::SQLite + stress test
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Wed, 20 Jun 2012 15:04:29 +0400
+
+libstream-more-perl (0.11.6) unstable; urgency=low
+
+  * fix coro_filter empty commit hanging
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Fri, 15 Jun 2012 17:39:11 +0400
+
+libstream-more-perl (0.11.5) unstable; urgency=low
+
+  * Stram::Filter::Coro->write made blocking
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Fri, 15 Jun 2012 16:49:42 +0400
+
+libstream-more-perl (0.11.4) unstable; urgency=low
+
+  * add coro_out function that writes into output stream in coros
+
+ -- nikita <nikita@yandex-team.ru>  Wed, 14 Jun 2012 17:01:21 +0400
+
+libstream-more-perl (0.11.3) unstable; urgency=low
+
+  * Stream::In::Buffer (MQ) 
+
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Wed, 13 Jun 2012 19:42:27 +0400
+
+libstream-more-perl (0.11.2) unstable; urgency=low
+
+  * Skip -> read commit on skip
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Wed, 13 Jun 2012 19:02:48 +0400
+
+libstream-more-perl (0.11.1) unstable; urgency=low
+
+  * fix - commit in Skip
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Wed, 06 Jun 2012 16:56:25 +0400
+
+libstream-more-perl (0.11.0) unstable; urgency=low
+
+  * refactor Stream::Filter::Coro - persistent coro threads
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Wed, 30 May 2012 22:01:21 +0400
+
+libstream-more-perl (0.10.1) unstable; urgency=low
+
+  * check lag on create
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Thu, 31 May 2012 14:23:34 +0400
+
+libstream-more-perl (0.10.0) unstable; urgency=low
+
+  * Commit callback in code_out
+  * RoundRobin: buffer_size option to enable implicit commit (flush). Is
+    turned on by default!
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Thu, 24 May 2012 22:37:40 +0400
+
+libstream-more-perl (0.9.0) unstable; urgency=low
+
+  * Stream::Moose module with stream traits
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Fri, 18 May 2012 18:00:13 +0400
+
+libstream-more-perl (0.8.5) unstable; urgency=low
+
+  * Bump version
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Fri, 18 May 2012 10:42:35 +0400
+
+libstream-more-perl (0.8.4) unstable; urgency=low
+
+  * Skip filter
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Fri, 18 May 2012 10:42:12 +0400
+
 libstream-more-perl (0.8.3) unstable; urgency=low
 
   * Stream::In::DiskBuffer::Chunk: remove old chunk.new if it exists - should

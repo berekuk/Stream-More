@@ -57,6 +57,12 @@ has 'position' => (
     lazy_build => 1,
 );
 
+has 'commited' => (
+    is => 'rw',
+    isa => 'Bool',
+    default => 1,
+);
+
 sub _build_position {
     my $self = shift;
     my $state = Yandex::Persistent->new($self->dir.'/state', { read_only => 1 });
@@ -143,8 +149,13 @@ sub read_chunk {
     $self->position($cur);
 
     unless (@buffer) {
-        $self->clear_lock; # since we read nothing, this is safe
+        if ($self->commited) {
+           $self->clear_position;
+           $self->clear_lock; # since we read nothing, this is safe
+        }
         return;
+    } else {
+        $self->commited(0);
     }
     return \@buffer;
 }
@@ -153,6 +164,7 @@ sub commit {
     my $self = shift;
 
     $self->_commit_position;
+    $self->commited(1);
     $self->clear_lock;
 }
 

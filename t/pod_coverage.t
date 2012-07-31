@@ -21,6 +21,8 @@ sub coverage_class {
         or /^Stream::Moose/
         or /^Stream::Queue/
         or /^Stream::Concat/
+        or /^Stream::Buffer/
+        or /^Stream::In::DiskBuffer::Chunk/
         or /^Stream::Filter::Coro/;
 
     return 'CountParents';
@@ -41,7 +43,7 @@ for my $module (all_modules()) {
     pod_coverage_ok($module, {
         coverage_class => "Pod::Coverage::$class",
         %$options,
-        also_private => [ qr/^BUILD|DOES$/ ],
+        also_private => [ qr/^BUILD|DOES|DEMOLISH$/ ],
     });
 }
 

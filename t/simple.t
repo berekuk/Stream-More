@@ -12,8 +12,8 @@ use Stream::Test::Out;
 use Test::More;
 use Test::Exception;
 
-use Streams qw(filter);
-use Stream::Simple qw(code_in array_in code_out coro_filter);
+use Streams qw(filter process);
+use Stream::Simple qw(code_in array_in code_out coro_filter coro_out memory_storage);
 
 # array_in - read (5)
 sub array_in_read :Test(5) {
@@ -34,11 +34,12 @@ sub array_in_read_chunk :Test(3) {
     $s->commit; # does nothing, but shouldn't fail
 }
 
-sub code_out_test :Test(3) {
+sub code_out_test :Test(6) {
     my @data_in = ('a', 5, { x => 'y' });
     my @data_out;
 
     throws_ok(sub { &code_out('a') }, qr/Expected callback/, 'code_out throws exception when parameter is not a coderef');
+    throws_ok(sub { &code_out(sub { }, 'a') }, qr/Expected commit callback/, 'code_out throws exception when second parameter is not a coderef');
 
     my $p = code_out(sub { push @data_out, shift });
     ok($p->isa('Stream::Out'), 'code_out result looks like output stream');
@@ -47,6 +48,17 @@ sub code_out_test :Test(3) {
     }
     $p->commit;
     is_deeply(\@data_out, \@data_in, 'code_out result works as anonymous output stream');
+
+    my @buffer;
+    @data_out = ();
+    $p = code_out(sub { push @buffer, shift}, sub { push @data_out, splice @buffer });
+    for (@data_in) {
+        $p->write($_);
+    }
+    is_deeply(\@data_out, [], 'code_out waites for commit');
+
+    $p->commit;
+    is_deeply(\@data_out, \@data_in, 'code_out done commit callback');
 }
 
 sub code_in_test :Test(5) {
@@ -64,6 +76,57 @@ sub code_in_test :Test(5) {
 
 sub coro_filter_test :Test(1) {
     ok coro_filter(5 => filter {})->isa('Stream::Filter::Coro');
+}
+
+sub coro_out_test :Test(5) {
+    my $id = 0;
+    my %res_hash;
+
+    use Coro::AnyEvent;
+
+    my $code_out = sub {
+        my $cur_id = $id++;
+        my @items;
+        return code_out(
+            sub {
+                my $item = shift;
+                Coro::AnyEvent::sleep(1);
+                push @items, $item;
+                return $item;
+            },
+            sub {
+                push @{$res_hash{$cur_id}}, @items;
+                @items = ();
+            }
+        )
+    };
+
+    my $coro_out = coro_out(5 => $code_out);
+    ok $coro_out->isa('Stream::Out');
+
+    my $start = time;
+
+    process(
+        array_in([ 1 .. 10])
+        => $coro_out
+    );
+
+    my $end = time;
+    cmp_ok $end - $start, '<', 2.5;
+    cmp_ok $end - $start, '>', 1.5;
+
+    is_deeply
+    [0..4],
+    [ sort { $a <=> $b } keys %res_hash ];
+
+    my @result;
+    foreach my $key (keys %res_hash) {
+        push @result, @{$res_hash{$key}};
+    }
+
+    is_deeply
+    [1 .. 10],
+    [ sort { $a <=> $b } @result ];
 }
 
 Test::Class->runtests(

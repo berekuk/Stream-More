@@ -15,9 +15,9 @@ use Params::Validate qw(:all);
 
 use Carp;
 use Yandex::Logger;
-use Yandex::Lockf;
+use Yandex::Lockf 3.0;
 use Yandex::Persistent;
-use Yandex::X;
+use autodie qw(unlink);
 use Stream::In::DiskBuffer::Chunk;
 
 use Scalar::Util qw(blessed);
@@ -30,7 +30,7 @@ use Scalar::Util qw(blessed);
 
 Some storages don't support parallel reading using one client name.
 
-This class solves this problem by caching small backlog in multiple on-disk files, allowing to read them in parallel.
+This class solves this problem by caching small backlog in multiple on-disk files, allowing them to be processed in parallel.
 
 =head1 METHODS
 
@@ -44,7 +44,7 @@ Constructor.
 
 C<$in> can be L<Stream::In> object or coderef which returns L<Stream::In> object.
 
-Second variant is useful if underlying input stream caches stream position; in this case, it's necessary to recreate input stream every time when diskbuffer caches new portion of data, so that every item is read from underlying stream only once. For example, you definitely should write C<< Stream::In::DiskBuffer->new(sub { Stream::Log->new(...) }, $dir) >> and not C<< Stream::In::DiskBuffer->new(Stream::Log->new(...), $dir) >>.
+Second variant is useful if underlying input stream caches stream position; in this case, it's necessary to recreate input stream every time when diskbuffer caches new portion of data, so that every item is read from underlying stream only once. For example, you definitely should write C<< Stream::In::DiskBuffer->new(sub { Stream::Log::In->new(...) }, $dir) >> and not C<< Stream::In::DiskBuffer->new(Stream::Log::In->new(...), $dir) >>.
 
 C<$dir> is a path to local dir. It will be created automatically if at least its parent dir exists (you should have appropriate rights to do this, of course).
 
@@ -60,6 +60,12 @@ Buffer chunks format. Default is C<storable>.
 
 Period in seconds to run garbage collecting.
 
+=item I<read_lock>
+
+Take a short read lock while reading data from the underlying input stream.
+
+This option is true by default. You can turn it off if you're sure that your input stream is locking itself. (It usually should lock on read and then unlock on commit to cooperate correctly with diskbuffer.)
+
 =back
 
 =cut
@@ -68,9 +74,10 @@ sub new {
     my ($in, $dir, @options) = validate_pos(@_, { type => CODEREF | OBJECT }, { type => SCALAR }, { type => HASHREF, optional => 1 });
 
     my $self = validate(@options, {
-        format => { default => 'storable' },
-        gc_period => { default => 300 },
-        read_only => { default => 0 },
+        format => { default => 'storable', type => SCALAR },
+        gc_period => { default => 300, type => SCALAR, regex => qr/^\d+$/ },
+        read_only => { default => 0, type => BOOLEAN },
+        read_lock => { default => 1, type => BOOLEAN },
     });
     $self->{dir} = $dir;
 
@@ -87,7 +94,8 @@ sub new {
 
     unless (-d $dir) {
         $self->_check_ro();
-        xmkdir($dir);
+        mkdir($dir);
+        die "mkdir failed: $!" unless -d $dir;
     }
 
     unless ($self->{read_only}) {
@@ -133,17 +141,35 @@ sub _chunk2id {
     return $id;
 }
 
+sub _chunk {
+    my $self = shift;
+    my ($id, $overrides) = @_;
+    my $chunk = Stream::In::DiskBuffer::Chunk->new(
+        dir => $self->{dir},
+        id => $id,
+        format => $self->{format},
+        read_only => $self->{read_only},
+        ($overrides ? %$overrides : ()),
+    );
+}
+
 sub _new_chunk {
     my $self = shift;
     $self->_check_ro();
     my $chunk_size = $self->{uncommited} + 1;
 
+    my $read_lock;
+    $read_lock = lockf("$self->{dir}/read_lock") if $self->{read_lock};
+
     my $in = $self->in;
+
     my $data = $in->read_chunk($chunk_size);
     return unless $data;
     return unless @$data;
+
     my $new_id = $self->_next_id;
-    Stream::In::DiskBuffer::Chunk->new($self->{dir}, $new_id, $data, { format => $self->{format} });
+    my $chunk = $self->_chunk($new_id);
+    $chunk->create($data);
     $in->commit;
 
     return $new_id;
@@ -155,7 +181,9 @@ sub _load_chunk {
 
     # this line can create lock file for already removed chunk, which will be removed only at next gc()
     # TODO - think how we can fix it
-    return Stream::In::DiskBuffer::Chunk->load($self->{dir}, $id, { read_only => $self->{read_only}, format => $self->{format}, %$overrides });
+    my $chunk = $self->_chunk($id, $overrides);
+    $chunk->load or return;
+    return $chunk;
 }
 
 sub _next_chunk {
@@ -189,10 +217,12 @@ sub _next_chunk {
 
     # no chunks left
     unless ($self->{read_only}) {
-        my $new_chunk_id = $self->_new_chunk or return;
-        $try_chunk->("$self->{dir}/$new_chunk_id.chunk") and return 1;
-    } 
-    return; 
+        while () { # the newly create chunk may be stolen by a concurrent process
+            my $new_chunk_id = $self->_new_chunk or return;
+            $try_chunk->("$self->{dir}/$new_chunk_id.chunk") and return 1;
+        }
+    }
+    return;
 }
 
 =item B<< read() >>
@@ -308,29 +338,29 @@ sub gc {
         next if $file eq '.';
         next if $file eq '..';
         next if $file =~ /^meta/;
+        next if $file =~ /^read_lock$/;
         next if $file =~ /^\d+\.chunk$/;
-        my $unlink = sub {
-            xunlink("$self->{dir}/$file");
-        };
-
         if (my ($id) = $file =~ /^(\d+)\.(?: lock | status | status\.lock )$/x) {
-            unless (-e "$self->{dir}/$id.chunk") {
-                $unlink->();
-                DEBUG "Lost file $file removed";
+            my $chunk = $self->_chunk($id);
+            $chunk->cleanup;
+            next;
+        }
+
+        my $abs_file = "$self->{dir}/$file";
+
+        if ($file =~ /^tmpchunk/ or $file =~ /^yandex\.tmp\./) {
+            my $ctime = (stat $abs_file)[10];
+            next unless $ctime; # tmp file already disappeared
+            my $age = time - $ctime;
+            if (-e $abs_file and $age > 600) { # tmp file is too old
+                unlink $abs_file;
+                DEBUG "Temp file $file removed";
             }
             next;
         }
 
-        if ($file =~ /^(\d+)\.chunk.new$/) {
-            my $age = time - (stat($file))[10];
-            unless ($age < 600) {
-                $unlink->();
-                DEBUG "Temp file $file removed";
-                next;
-            }
-        }
         WARN "Removing unknown file $file";
-        $unlink->();
+        unlink $abs_file;
     }
     closedir $dh or die "Can't close '$self->{dir}': $!";
 }

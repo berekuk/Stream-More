@@ -251,6 +251,7 @@ sub in {
         }) => $self->dir."/clients/$client/buffer",
         {
             read_only => $self->read_only,
+            read_lock => 0,
         }
     );
 }

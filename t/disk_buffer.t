@@ -5,16 +5,20 @@ use warnings;
 
 use parent qw(Test::Class);
 use Test::More;
+use Test::Deep;
 
 use lib 'lib';
 
 use PPB::Test::TFiles;
+use Yandex::X qw(xqx xfork);
 use Stream::File;
 use Stream::File::Cursor;
 use Stream::In::DiskBuffer;
+use Time::HiRes qw(sleep time);
+use autodie qw(:all);
 
 sub setup :Test(setup) {
-    PPB::Test::TFiles::import;
+    PPB::Test::TFiles->import;
 }
 
 sub linear :Test(4) {
@@ -51,7 +55,7 @@ sub read_only :Test(4) {
     $buffered_in2->read for 1 .. 3;
     undef $buffered_in2;
     # commit neither but unlock
-    system("chmod -w -R tfiles/buffer"); die if $?;
+    system("chmod -w -R tfiles/buffer");
     my $buffered_ro = Stream::In::DiskBuffer->new($in, 'tfiles/buffer', { read_only => 1, format => 'plain' });
     my $data = $buffered_ro->read_chunk(5); # lives_ok?
     is_deeply($data, [map {"$_\n"} ('a'..'e')], "read some");
@@ -59,7 +63,7 @@ sub read_only :Test(4) {
     $data = $buffered_ro->read_chunk(10);
     is_deeply($data, [map {"$_\n"} ('f'..'o')], "read more");
     is($buffered_ro->lag(), (26-15)*2, "yet lag");
-    system("chmod u+w -R tfiles/buffer"); die if $?;
+    system("chmod u+w -R tfiles/buffer");
 }
 
 sub gc_bug :Test(4) {
@@ -123,5 +127,150 @@ sub in_coderef :Tests {
     ok(@db1_data > 10, 'at least 10 items from first db');
     ok(@db2_data > 10, 'at least 10 items from second db');
 }
+
+sub steal_new_chunk_race :Tests {
+
+    my $file = Stream::File->new('tfiles/file');
+    my $TOTAL = 50000;
+    $file->write("$_\n") for 1 .. $TOTAL;
+    $file->commit;
+
+    my $gen_in = sub {
+        return Stream::File->new('tfiles/file')->stream(Stream::File::Cursor->new('tfiles/cursor'));
+    };
+
+    my $PROCESSES = 5;
+    for my $process (1 .. $PROCESSES) {
+        xfork and next;
+        eval {
+            my $in = Stream::In::DiskBuffer->new($gen_in, 'tfiles/buffer');
+            my $out = Stream::File->new("tfiles/file.$process");
+            while () {
+                my $line = $in->read();
+                last unless $line; # some bugs lead to a premature 'undef' returned from a non ampty DiskBuffer
+                $out->write($line);
+                if (rand(100) < 3) {
+                    $in->commit();
+                    undef $in;
+                    $in = Stream::In::DiskBuffer->new($gen_in, 'tfiles/buffer');
+                }
+            }
+            $out->commit();
+            $in->commit();
+        };
+        if ($@) {
+            warn "$@";
+            exit(1);
+        }
+        exit;
+    }
+    while () {
+        last if wait == -1;
+        is($?, 0, "error code");
+    }
+    my @counts;
+    for (1 .. $PROCESSES) {
+        push @counts, int(xqx("cat tfiles/file.$_ | wc -l"));
+    }
+    my $total = int(xqx("cat tfiles/file.* | wc -l"));
+    is($total, $TOTAL, "total count");
+    for (1 .. $PROCESSES) {
+        cmp_ok(shift @counts, ">", $TOTAL/$PROCESSES*0.8, "no premature exit");
+    }
+}
+
+sub gc_race :Tests {
+
+    my $LINES = $ENV{LINES} || 10_000;
+    my $WORKERS = $ENV{WORKERS} || 5;
+
+    my $out = Stream::File->new('tfiles/out');
+
+    my $file = Stream::File->new('tfiles/file');
+    system('touch tfiles/file');
+
+    for (1 .. $WORKERS) {
+        fork and next;
+        eval {
+            my $time = time;
+            my $buffered_in = Stream::In::DiskBuffer->new(
+                sub { $file->stream(Stream::File::Cursor->new('tfiles/cursor')) },
+                'tfiles/buffer'
+            );
+            my $i = 0;
+            while () {
+                $i++;
+
+                $buffered_in->gc if rand() < 5 * $WORKERS / $LINES; # call gc 5 times per worker on average
+
+                $buffered_in->lag if rand() < 5 * $WORKERS / $LINES; # call lag 5 times per worker on average
+                #  lag is prone to race contitions too, let's check whether it fails
+
+                last if time >= $time + 3; # should be enough for everyone
+                my $line = $buffered_in->read;
+
+                $buffered_in->commit if rand() < 5 * $WORKERS / $LINES;
+
+                # busy-waiting
+                # otherwise it's too probable that one worker will block everyone else and then read everything himself
+                next unless $line;
+
+                $out->write($line);
+            }
+            $buffered_in->commit;
+            $out->commit;
+        };
+        if ($@) {
+            diag "Worker error: $@";
+            exit 1;
+        }
+        exit 0;
+    }
+
+    for (1 .. $LINES) {
+        $file->write("$_\n");
+        sleep 1 / $LINES;
+    }
+    $file->commit;
+
+    while () {
+        last if wait == -1;
+        TODO: {
+            local $TODO = "fix this!!!";
+            is($?, 0, "exit code");
+        }
+    }
+
+    my $files = xqx('find tfiles/buffer | wc -l');
+    chomp $files;
+    TODO: {
+        local $TODO = "fix this!!!";
+        cmp_ok($files, '<', 10, 'not too many files in buffer dir');
+    }
+
+    my @lines = sort { $a <=> $b } split /\n/, qx(cat tfiles/out);
+    TODO: {
+        local $TODO = "fix this!!!";
+        cmp_deeply(\@lines, [1 .. $LINES], "no dups");
+    }
+}
+
+sub permissions :Tests {
+    my $file = Stream::File->new('tfiles/file');
+    $file->write("$_\n") for 'a'..'z';
+    $file->commit;
+
+    my $in = $file->stream(Stream::File::Cursor->new('tfiles/cursor'));
+
+    my $buffered_in = Stream::In::DiskBuffer->new($in, 'tfiles/buffer');
+    $buffered_in->read;
+
+    my @chunks = glob 'tfiles/buffer/*.chunk';
+    is scalar @chunks, 1;
+
+    my @stat = stat $chunks[0];
+    is sprintf("%o", $stat[2] & 0777), '644';
+}
+
 
 __PACKAGE__->new->runtests;

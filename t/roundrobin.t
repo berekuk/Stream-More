@@ -7,6 +7,7 @@ use lib 'lib';
 
 use Test::More;
 use Test::Fatal;
+use Test::Deep;
 use parent qw(Test::Class);
 
 use namespace::autoclean;
@@ -17,6 +18,9 @@ use Stream::Simple qw( array_in code_out );
 use Streams qw( process );
 use PPB::Test::TFiles;
 use PPB::Progress;
+use Yandex::X qw(xfork xprint xopen xqx);
+use Yandex::Logger;
+use Time::HiRes qw( sleep time );
 
 use Perl6::Slurp;
 use List::Util qw(min);
@@ -66,7 +70,7 @@ sub autocreate_dirs :Test(2) {
 
 sub write_and_check_data_file :Test(9) {
     my $self = shift;
-    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', data_size => 10);
+    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => 10);
     $storage->write("abc\n");
     $storage->commit;
 
@@ -130,6 +134,8 @@ sub stress :Test {
     my $id = 0;
     my $progress = PPB::Progress->new(max => scalar @data);
 
+    my @c = map { $storage->in("client$_") } (0..9);
+
     while (1) {
         my $success;
         try {
@@ -150,7 +156,7 @@ sub stress :Test {
             }
         };
         for (0 .. 9) {
-            $success += process($storage->in("client$_") => $outs[$_], { limit => 1 + int rand 100, chunk_size => 10 });
+            $success += process($c[$_] => $outs[$_], { limit => 1 + int rand 100, chunk_size => 10 });
         }
 
         # tmp intermediate check
@@ -195,6 +201,90 @@ sub check_does :Tests {
     ok scalar $storage->in('foo')->DOES('Stream::In'), 'roundrobin in DOES in';
     ok scalar $storage->in('foo')->DOES('Stream::In::Role::Lag'), 'roundrobin in DOES lag';
 
+
+}
+
+sub buffer_size_default :Tests {
+    my $self = shift;
+    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', data_size => 1000);
+    $storage->write("foo\n");
+    is($storage->in("main")->read, undef, 'some buffer space available');
+    $storage->write("bar\n" x 50);
+    is($storage->in("main")->read, "foo\n", 'implicit commit after buffer overflow');
+}
+
+sub buffer_size_disable :Tests {
+    my $self = shift;
+    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => 1000);
+
+    $storage->write("x\n") for (1..499);
+    is($storage->in("main")->read, undef, 'implicit commit disabled');
+    $storage->commit;
+    is($storage->in("main")->read, "x\n", 'explicit commit ok');
+}
+
+sub race :Tests {
+
+    my $lines = $ENV{RACE_LINES} || 100;
+    my $get_storage = sub {
+        Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => $lines * 10)
+    };
+
+    for (1..5) {
+        xfork and next;
+        eval {
+            my $time = time;
+            my $in = $get_storage->()->in("main");
+            my $out = xopen(">", "tfiles/out.$_");
+            while () {
+                last if time >= $time + 2;
+                my $line = $in->read;
+                next unless $line;
+                xprint($out, $line);     
+            }
+            $in->commit;
+        };
+        if ($@) {
+            WARN $@;
+            exit 1;
+        }
+        exit 0;
+    }
+
+    my $t = Time::HiRes::time;
+    my $storage = $get_storage->();
+    for (1 .. $lines) {
+        $storage->write("$_\n");
+        $storage->commit;
+        sleep 1 / $lines;
+    }
+
+    diag("time spent: ", Time::HiRes::time - $t);
+
+    while () {
+        last if wait == -1;
+        is($?, 0, "exit code");
+    }
+    my @lines = sort { $a <=> $b } split /\n/, xqx("cat tfiles/out.*");
+    cmp_deeply(\@lines, [1 .. $lines], "no dups");
+}
+
+sub no_buffer :Tests {
+
+    my $self = shift;
+    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', buffer => 0, data_size => 1000);
+    $storage->register_client("main");
+
+    $storage->write("x\n");
+    $storage->commit;
+
+    my $in = $storage->in("main", { buffer => 0 });
+
+    is_deeply($in->read_chunk(2), [ "x\n" ]);
+    is($in->read_chunk(2), undef);
+    $in->commit;
+    $in = $storage->in("main", { buffer => 0 });
+    is($in->read_chunk(2), undef);
 
 }
 
