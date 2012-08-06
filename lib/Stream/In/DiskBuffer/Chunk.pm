@@ -103,7 +103,7 @@ Create the new chunk and fill it with given arrayref of data atomically.
 Exception will happen if chunk already exists.
 
 =cut
-my $uid = int rand 100000; # per-process random uid for generating random tmp file names
+my $uid = 0; 
 sub create {
     my $self = shift;
     my ($data) = validate_pos(@_, { type => ARRAYREF });

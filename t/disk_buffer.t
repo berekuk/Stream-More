@@ -235,24 +235,15 @@ sub gc_race :Tests {
 
     while () {
         last if wait == -1;
-        TODO: {
-            local $TODO = "fix this!!!";
-            is($?, 0, "exit code");
-        }
+        is($?, 0, "exit code");
     }
 
     my $files = xqx('find tfiles/buffer | wc -l');
     chomp $files;
-    TODO: {
-        local $TODO = "fix this!!!";
-        cmp_ok($files, '<', 10, 'not too many files in buffer dir');
-    }
+    cmp_ok($files, '<', 10, 'not too many files in buffer dir');
 
     my @lines = sort { $a <=> $b } split /\n/, qx(cat tfiles/out);
-    TODO: {
-        local $TODO = "fix this!!!";
-        cmp_deeply(\@lines, [1 .. $LINES], "no dups");
-    }
+    cmp_deeply(\@lines, [1 .. $LINES], "no dups");
 }
 
 sub permissions :Tests {

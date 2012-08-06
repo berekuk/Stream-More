@@ -1,14 +1,14 @@
-libstream-more-perl (0.14.1) unstable; urgency=low
+libstream-more-perl (0.14.0) unstable; urgency=low
 
-  * Stream::Out::Balancer - first release
+  * Stream::Out::Balancer
 
  -- Serge Toropov <sombr@yandex-team.ru>  Mon, 06 Aug 2012 12:22:10 +0400
 
 libstream-more-perl (0.13.12) unstable; urgency=low
 
-  * Balancer
+  * DiskBuffer race fixed again
 
- -- Serge Toropov <sombr@yandex-team.ru>  Tue, 31 Jul 2012 15:27:35 +0400
+ -- Andrei Mishchenko <druxa@yandex-team.ru>  Mon, 30 Jul 2012 19:27:37 +0400
 
 libstream-more-perl (0.13.11) unstable; urgency=low
 
