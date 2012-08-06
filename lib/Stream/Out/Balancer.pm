@@ -88,31 +88,18 @@ sub new {
         balance_percent => { type => SCALAR, regex => qr/^\d*\.?\d+$/, default => 0.8 },
         normal_distribution => { type => BOOLEAN, default => 0 },
     });
-    $options->{shuffle} = 0;
 
-    my $normal_distribution = delete $options->{normal_distribution};
-    my $cache_period = delete $options->{cache_period};
-    my $balance_percent = delete $options->{balance_percent};
+    my $self = $class->SUPER::new($targets, { shuffle => 0, revalidate => $options->{revalidate} });
+    $self->{$_} = $options->{$_} for (keys %$options);
+    $self = bless $self => $class;
 
-    my $self = $class->SUPER::new([_targets($targets)], $options);
-    if ($normal_distribution) {
-        my $A = 5;
-        my $K = - ( int($balance_percent * scalar @$targets) - 1 )**2 / log( 1 / $A );
-        my $norm_gen = sub { my ($x, $k) = @_; return int($A * exp( - $x**2 / $k )); };
-
-        $self->{indexes} = [ shuffle map { ($_) x $norm_gen->($_, $K) } (0 .. scalar @$targets - 1)];
-    } else {
-        $self->{indexes} = [ shuffle (0 .. int($balance_percent * scalar @$targets - 1) )];
-    }
+    $self->{indexes} = [ $self->_indexes ];
 
     $self->{timestamp} = time;
     $self->{w} = 0;
     $self->{n} = $self->{indexes}->[$self->{w}];
     $self->{w_total} = scalar @{ $self->{indexes} };
 
-    $self->{cache_period} = $cache_period;
-
-    $self = bless $self => $class;
     return $self;
 }
 
@@ -128,14 +115,26 @@ Takes:   target list.
 Returns: targets sorted according to their occupancy.
 
 =cut
-sub _targets { # resort targets list according to their current occupancy
-    my ($targets) = @_;
+sub _indexes { # resort targets list according to their current occupancy
+    my ($self) = @_;
+    my $targets = $self->{targets};
+
     my %coefs = map { $_ => $targets->[$_]->occupancy } (0 .. scalar @$targets - 1);
 
     my @sorted_targets = (sort { $coefs{$a} <=> $coefs{$b} } keys %coefs)[ 0 .. scalar @$targets - 1 ];
-    my @res = map {$targets->[$_]} @sorted_targets;
 
-    return @res;
+    my @idxs = ();
+    if ($self->{normal_distribution}) {
+        my $A = 5;
+        my $K = - ( int($self->{balance_percent} * scalar @$targets) - 1 )**2 / log( 1 / $A );
+        my $norm_gen = sub { my ($x, $k) = @_; return int($A * exp( - $x**2 / $k )); };
+
+        @idxs = shuffle map { ($sorted_targets[ $_ ]) x $norm_gen->($_, $K) } (0 .. scalar @$targets - 1);
+    } else {
+        @idxs = shuffle map { $sorted_targets[ $_ ] } (0 .. int($self->{balance_percent} * scalar @$targets - 1) );
+    }
+
+    return @idxs;
 }
 
 =item B<_next_target>
@@ -148,7 +147,7 @@ sub _next_target {
     my $time = time;
 
     if ($self->{timestamp} < $time - $self->{cache_period}) { # refresh once in a minute
-        $self->{targets} = [_targets($self->{targets})];
+        $self->{indexes} = [ $self->_indexes() ];
         $self->{invalid} = [];
         $self->{timestamp} = $time;
     }

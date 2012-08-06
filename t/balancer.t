@@ -62,6 +62,36 @@ sub deviation {
     return sqrt($sq_avg);
 }
 
+sub transfer: Test {
+    {
+        my $targets_count = 3;
+        my $targets = [map {mock_obj()} (1..$targets_count)];
+
+        my $balancer_rand = Stream::Out::Balancer->new($targets, { normal_distribution => 0 });
+
+        process(array_in([1..50]) => $balancer_rand, {chunk_size => 1});
+
+        my $transfered = 0;
+        $transfered += $_->{buffer} for @$targets;
+
+        is($transfered, 50);
+    }
+
+    {
+        my $targets_count = 30;
+        my $targets = [map {mock_obj()} (1..$targets_count)];
+
+        my $balancer_rand = Stream::Out::Balancer->new($targets, { normal_distribution => 0 });
+
+        process(array_in([1..5000]) => $balancer_rand, {chunk_size => 100});
+
+        my $transfered = 0;
+        $transfered += $_->{buffer} for @$targets;
+
+        is($transfered, 5000);
+    }
+}
+
 sub balance: Tests {
     set_step(100);
 
@@ -79,7 +109,7 @@ sub balance: Tests {
 
         my $balancer_rand = Stream::Out::Balancer->new($targets, { normal_distribution => 0 });
 
-        process(array_in([0..1500]) => $balancer_rand, {chunk_size => 1});
+        process(array_in([1..5000]) => $balancer_rand, {chunk_size => 10});
         is($is_done, 0, 'no writes in bad 20% - rand ');
 
         $rand_dev = deviation([ grep { $_->occupancy() < 1_000_000 } @$targets ]);
@@ -98,7 +128,7 @@ sub balance: Tests {
 
         my $balancer_norm = Stream::Out::Balancer->new($targets, { normal_distribution => 1 });
 
-        process(array_in([0..1500]) => $balancer_norm, {chunk_size => 1});
+        process(array_in([1..5000]) => $balancer_norm, {chunk_size => 10});
         is($is_done, 0, 'no writes in bad 20% - norm ');
 
         $normal_dev = deviation([ grep { $_->occupancy() < 1_000_000 } @$targets ]);
