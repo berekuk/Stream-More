@@ -1,3 +1,9 @@
+libstream-more-perl (0.14.1) unstable; urgency=low
+
+  * refactor indexes in Balancer, fix occupancy from -down- hosts
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Wed, 22 Aug 2012 13:20:32 +0400
+
 libstream-more-perl (0.14.0) unstable; urgency=low
 
   * Stream::Out::Balancer
