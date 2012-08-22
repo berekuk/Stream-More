@@ -27,8 +27,9 @@ use Data::Dumper;
 sub mock_obj {
     my $mock = Test::MockObject->new();
     $mock->{buffer} = 0;
+    $mock->{down} = 0;
 
-    $mock->mock('occupancy' => sub { my $self = shift; return $self->{buffer}; } );
+    $mock->mock('occupancy' => sub { my $self = shift; die if $self->{down}; return $self->{buffer}; } );
     $mock->mock('write'        => sub { my $self = shift; $self->{buffer}++ } );
     $mock->mock('write_chunk'  => sub { my ($self, $chunk) = @_; $self->{buffer} += scalar @$chunk; });
     $mock->mock('commit'       => sub { return 1; });
@@ -62,7 +63,30 @@ sub deviation {
     return sqrt($sq_avg);
 }
 
-sub transfer: Test {
+sub drop_down_hosts: Test {
+    my $targets_count = 2;
+    my $targets = [map {mock_obj()} (1..$targets_count)];
+
+    $targets->[0]->{down} = 1;
+
+    lives_ok(sub { Stream::Out::Balancer->new($targets, { normal_distribution => 1 }) }, "should live with 2");
+}
+
+sub two_targets: Test {
+    my $targets_count = 2;
+    my $targets = [map {mock_obj()} (1..$targets_count)];
+
+    lives_ok(sub { Stream::Out::Balancer->new($targets, { normal_distribution => 1 }) }, "should live with 2");
+}
+
+sub one_target: Test {
+    my $targets_count = 1;
+    my $targets = [map {mock_obj()} (1..$targets_count)];
+
+    lives_ok(sub { Stream::Out::Balancer->new($targets, { normal_distribution => 1 }) }, "should live with 1");
+}
+
+sub transfer: Tests {
     {
         my $targets_count = 3;
         my $targets = [map {mock_obj()} (1..$targets_count)];

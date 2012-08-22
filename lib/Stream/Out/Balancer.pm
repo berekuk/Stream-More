@@ -119,19 +119,23 @@ sub _indexes { # resort targets list according to their current occupancy
     my ($self) = @_;
     my $targets = $self->{targets};
 
-    my %coefs = map { $_ => $targets->[$_]->occupancy } (0 .. scalar @$targets - 1);
+    my %coefs = map { my $occ = eval { $targets->[$_]->occupancy }; (defined $occ) ? ($_ => $occ) : () } (0 .. $#$targets);
+    die "All targets are DOWN" unless keys %coefs;
 
-    my @sorted_targets = (sort { $coefs{$a} <=> $coefs{$b} } keys %coefs)[ 0 .. scalar @$targets - 1 ];
+    my @sorted_targets = sort { $coefs{$a} <=> $coefs{$b} } keys %coefs;
+
+    my $max_trusted_id = int($self->{balance_percent} * $#$targets);
+    $max_trusted_id = $#sorted_targets if ($max_trusted_id > $#sorted_targets);
 
     my @idxs = ();
-    if ($self->{normal_distribution}) {
+    if ($self->{normal_distribution} && $max_trusted_id > 0) {
         my $A = 5;
-        my $K = - ( int($self->{balance_percent} * scalar @$targets) - 1 )**2 / log( 1 / $A );
+        my $K = - ( $max_trusted_id**2 / log( 1 / $A ) );
         my $norm_gen = sub { my ($x, $k) = @_; return int($A * exp( - $x**2 / $k )); };
 
-        @idxs = shuffle map { ($sorted_targets[ $_ ]) x $norm_gen->($_, $K) } (0 .. scalar @$targets - 1);
+        @idxs = shuffle map { ($sorted_targets[ $_ ]) x $norm_gen->($_, $K) } (0 .. $#$targets);
     } else {
-        @idxs = shuffle map { $sorted_targets[ $_ ] } (0 .. int($self->{balance_percent} * scalar @$targets - 1) );
+        @idxs = shuffle map { $sorted_targets[ $_ ] } (0 .. $max_trusted_id );
     }
 
     return @idxs;
