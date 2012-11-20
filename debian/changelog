@@ -1,3 +1,9 @@
+libstream-more-perl (0.14.3) unstable; urgency=low
+
+  * fix w_total
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Tue, 20 Nov 2012 14:51:29 +0400
+
 libstream-more-perl (0.14.2) unstable; urgency=low
 
   * make Balancer adaptive to broken hosts

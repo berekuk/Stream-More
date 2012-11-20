@@ -143,7 +143,7 @@ sub _indexes { # resort targets list according to their current occupancy
         my $K = - ( $max_trusted_id**2 / log( 1 / $A ) );
         my $norm_gen = sub { my ($x, $k) = @_; return int($A * exp( - $x**2 / $k )); };
 
-        @idxs = shuffle map { ($sorted_targets[ $_ ]) x $norm_gen->($_, $K) } (0 .. $#$targets);
+        @idxs = shuffle map { ($sorted_targets[ $_ ]) x $norm_gen->($_, $K) } (0 .. $#sorted_targets);
     } else {
         @idxs = shuffle map { $sorted_targets[ $_ ] } (0 .. $max_trusted_id );
     }
@@ -164,6 +164,7 @@ sub _next_target {
         $self->{indexes} = [ $self->_indexes() ];
         $self->{invalid} = [];
         $self->{timestamp} = $time;
+        $self->{w_total} = scalar @{ $self->{indexes} };
     }
 
     do {
