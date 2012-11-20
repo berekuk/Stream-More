@@ -1,3 +1,10 @@
+libstream-more-perl (0.14.2) unstable; urgency=low
+
+  * make Balancer adaptive to broken hosts
+  * make Normal distribution by default
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Tue, 20 Nov 2012 13:00:54 +0400
+
 libstream-more-perl (0.14.1) unstable; urgency=low
 
   * refactor indexes in Balancer, fix occupancy from -down- hosts

@@ -32,6 +32,8 @@ use Params::Validate qw(:all);
 use Scalar::Util qw(blessed);
 use List::Util qw(shuffle);
 
+use Carp;
+
 =head1 CONSTRUCTOR
 
 =over
@@ -85,8 +87,9 @@ sub new {
     my $options = validate(@options, {
         cache_period => { type => SCALAR, regex => qr/^\d+$/, default => 60 },
         revalidate => { type => SCALAR, regex => qr/^\d+$/, default => 30 },
-        balance_percent => { type => SCALAR, regex => qr/^\d*\.?\d+$/, default => 0.8 },
-        normal_distribution => { type => BOOLEAN, default => 0 },
+        balance_percent => { type => SCALAR, regex => qr/^\d*\.?\d+$/, default => 0.8 }, # allowed percent of slow/broken maching
+        normal_distribution => { type => BOOLEAN, default => 1 },                        # use uniform distribution or normal one
+        brake_adaptive => { type => BOOLEAN, default => 1 },                             # apply balance percent to total hosts count or to alive ones
     });
 
     my $self = $class->SUPER::new($targets, { shuffle => 0, revalidate => $options->{revalidate} });
@@ -124,8 +127,15 @@ sub _indexes { # resort targets list according to their current occupancy
 
     my @sorted_targets = sort { $coefs{$a} <=> $coefs{$b} } keys %coefs;
 
-    my $max_trusted_id = int($self->{balance_percent} * $#$targets);
-    $max_trusted_id = $#sorted_targets if ($max_trusted_id > $#sorted_targets);
+    confess "All hosts are down" unless @sorted_targets;
+
+    my $max_trusted_id = 0;
+    unless ( $self->{brake_adaptive} ) {
+        $max_trusted_id = int($self->{balance_percent} * $#$targets);
+        $max_trusted_id = $#sorted_targets if ($max_trusted_id > $#sorted_targets);
+    } else {
+        $max_trusted_id = int($self->{balance_percent} * $#sorted_targets);
+    }
 
     my @idxs = ();
     if ($self->{normal_distribution} && $max_trusted_id > 0) {
