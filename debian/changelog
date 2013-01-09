@@ -1,8 +1,9 @@
 libstream-more-perl (0.14.4) unstable; urgency=low
 
   * Stream::RoundRobin::In read-only mode
+  * Stream::Moose::Out::Buffered role
 
- -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Wed, 09 Jan 2013 19:25:40 +0400
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Wed, 09 Jan 2013 20:05:20 +0400
 
 libstream-more-perl (0.14.3) unstable; urgency=low
 
