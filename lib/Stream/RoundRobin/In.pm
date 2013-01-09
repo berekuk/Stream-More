@@ -90,9 +90,9 @@ sub read_chunk {
     my $self = shift;
     my $length = shift;
 
-    $self->lock;
+    $self->lock unless $self->read_only;
 
-    open my $fh, '+<', $self->storage->dir.'/data';
+    open my $fh, '<', $self->storage->dir.'/data';
 
     my $cur = $self->position;
     seek($fh, $cur, SEEK_SET);
