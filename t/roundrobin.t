@@ -230,6 +230,10 @@ sub race :Tests {
         Stream::RoundRobin->new(dir => 'tfiles/a', buffer_size => 0, data_size => $lines * 10)
     };
 
+    $get_storage->()->register_client("main");
+
+    my $time_limit = 5;
+
     for (1..5) {
         xfork and next;
         eval {
@@ -237,7 +241,7 @@ sub race :Tests {
             my $in = $get_storage->()->in("main");
             my $out = xopen(">", "tfiles/out.$_");
             while () {
-                last if time >= $time + 2;
+                last if time >= $time + $time_limit;
                 my $line = $in->read;
                 next unless $line;
                 xprint($out, $line);     
@@ -259,7 +263,11 @@ sub race :Tests {
         sleep 1 / $lines;
     }
 
-    diag("time spent: ", Time::HiRes::time - $t);
+    my $write_time_spent = Time::HiRes::time - $t;
+    diag("time spent: $write_time_spent");
+    if ($write_time_spent > $time_limit) {
+        diag("ATTENTION: client's time_limit is too low ($time_limit)");
+    }
 
     while () {
         last if wait == -1;
