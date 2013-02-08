@@ -1,3 +1,9 @@
+libstream-more-perl (0.14.5) unstable; urgency=low
+
+  * Not die on non existed log in Stream::Skip
+
+ -- nikita <nikita@yandex-team.ru>  Fri, 08 Feb 2013 17:06:20 +0400
+
 libstream-more-perl (0.14.4) unstable; urgency=low
 
   * Stream::RoundRobin::In read-only mode

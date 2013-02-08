@@ -71,7 +71,12 @@ sub new {
     $self->{count} = 0;
 
     $self->{max_lag} = ($self->{skip_percent} * $self->{max_data_size}) / 100 if $self->{max_lag} < 0;
-    $self->{skip} = ($in->lag() >= $self->{max_lag});
+    eval {
+        $self->{skip} = ($in->lag() >= $self->{max_lag});
+    };
+    if ($@) {
+        $self->{skip} = 0;
+    }
 
     return bless $self, $class;
 }
@@ -87,7 +92,10 @@ Gets lag of input stream and checks whether it exceeds our limit
 =cut
 sub check_lag {
     my $self = shift;
-    return ($self->{in_stream}->lag() >= $self->{max_lag})
+    eval {
+        return ($self->{in_stream}->lag() >= $self->{max_lag})
+    };
+    return 0;
 }
 
 sub read {
