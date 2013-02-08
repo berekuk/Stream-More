@@ -92,10 +92,11 @@ Gets lag of input stream and checks whether it exceeds our limit
 =cut
 sub check_lag {
     my $self = shift;
+    my $result = 0;
     eval {
-        return ($self->{in_stream}->lag() >= $self->{max_lag})
+         $result = ($self->{in_stream}->lag() >= $self->{max_lag});
     };
-    return 0;
+    return $result;
 }
 
 sub read {
