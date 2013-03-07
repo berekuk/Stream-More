@@ -122,7 +122,8 @@ sub _indexes { # resort targets list according to their current occupancy
     my ($self) = @_;
     my $targets = $self->{targets};
 
-    my %coefs = map { my $occ = eval { $targets->[$_]->occupancy }; (defined $occ) ? ($_ => $occ) : () } (0 .. $#$targets);
+    my @source_ids = grep { !$self->_is_invalid($_) } (0 .. $#$targets);
+    my %coefs = map { my $occ = eval { $targets->[$_]->occupancy }; (defined $occ) ? ($_ => $occ) : () } @source_ids;
     die "All targets are DOWN" unless keys %coefs;
 
     my @sorted_targets = sort { $coefs{$a} <=> $coefs{$b} } keys %coefs;

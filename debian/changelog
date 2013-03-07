@@ -1,3 +1,9 @@
+libstream-more-perl (0.14.6) unstable; urgency=low
+
+  * don't ask for oppupancy of broken hosts
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Thu, 07 Mar 2013 17:26:25 +0400
+
 libstream-more-perl (0.14.5) unstable; urgency=low
 
   * Not die on non existed log in Stream::Skip
