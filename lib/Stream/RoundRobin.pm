@@ -99,6 +99,13 @@ has 'buffer_size' => (
     },
 );
 
+has 'buffer' => (
+    is => 'ro',
+    isa => 'Int',
+    lazy => 1, # depends on $self->data_size
+    default => 1,
+);
+
 sub _mkdir_unless_exists {
     my $self = shift;
     my ($dir) = @_;
@@ -241,7 +248,7 @@ sub commit {
         size => $self->data_size,
         positions => {
             "storage's own" => $old_position,
-            map { $_ => $self->in($_)->in->position } $self->client_names,
+            map { $_ => $self->buffer ? $self->in($_)->in->position : $self->in($_)->position } $self->client_names,
         },
     );
 
@@ -287,7 +294,7 @@ sub register_client {
 
     INFO "Registering $name at ".$self->dir;
     $self->_mkdir_unless_exists($self->dir."/clients/$name");
-    $self->in($name)->in->commit; # create client state
+    return $self->buffer ? $self->in($name)->in->commit : $self->in($name)->commit; # create client state
 }
 
 sub unregister_client {
@@ -325,7 +332,7 @@ sub in {
 
     my $in = Stream::RoundRobin::In->new(storage => $self, name => $client);
 
-    if ($use_buffer) {
+    if ((defined($other->{buffer}) && $use_buffer) || (!defined($other->{buffer}) && $self->buffer)) {
         return Stream::In::DiskBuffer->new(
             $in  => $self->dir."/clients/$client/buffer",
             {

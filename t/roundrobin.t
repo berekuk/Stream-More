@@ -280,18 +280,26 @@ sub race :Tests {
 sub no_buffer :Tests {
 
     my $self = shift;
-    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', buffer => 0, data_size => 1000);
+    my $storage = Stream::RoundRobin->new(dir => 'tfiles/a', data_size => 1000);
     $storage->register_client("main");
 
     $storage->write("x\n");
     $storage->commit;
 
-    my $in = $storage->in("main", { buffer => 0 });
+    my $in = $storage->in("main");
+    is(ref($in), 'Stream::In::DiskBuffer', 'buffer by default');
+    my $in0 = $storage->in("main0", { buffer => 0 });
+    is(ref($in0), 'Stream::RoundRobin::In', 'no buffer explicitly specified');
+    my $storage0 = Stream::RoundRobin->new(dir => 'tfiles/a', data_size => 1000, buffer => 0);
+    $in0 = $storage0->in("main");
+    is(ref($in0), 'Stream::RoundRobin::In', 'no buffer by default now');
+    $in0 = $storage0->in("main0", { buffer => 1 });
+    is(ref($in0), 'Stream::In::DiskBuffer', 'buffer explicitly specified now');
 
     is_deeply($in->read_chunk(2), [ "x\n" ]);
     is($in->read_chunk(2), undef);
     $in->commit;
-    $in = $storage->in("main", { buffer => 0 });
+    $in = $storage->in("main");
     is($in->read_chunk(2), undef);
 
 }
