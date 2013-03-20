@@ -49,7 +49,7 @@ has 'dir' => (
 
 Data size in bytes.
 
-RoundRobin storage always occupy this amount of space on disk (more or less).
+RoundRobin storage always occupies this amount of space on disk (more or less).
 
 Default is 1GB.
 
@@ -99,10 +99,15 @@ has 'buffer_size' => (
     },
 );
 
+=item B< buffer >
+
+Buffer attribute. 1 by default, with this setting input streams are wrapped in L<Stream::In::DuskBuffer> for convenience. If set to zero, all input streams are just raw L<Stream::RoundRobin::In> objects (this can be useful, for example, if you process data in a single process and need more performance.)
+
+=cut
+
 has 'buffer' => (
     is => 'ro',
-    isa => 'Int',
-    lazy => 1, # depends on $self->data_size
+    isa => 'Bool',
     default => 1,
 );
 
@@ -315,8 +320,7 @@ sub unregister_client {
 
 Get input stream by a client name.
 
-Input streams are wrapped in L<Stream::In::DuskBuffer> for convinience. You can pass C<< buffer => 0 >> as a second parameter to avoid this and get a raw L<Stream::In::DiskBuffer> object.
-(This can be useful, for example, if you process data in a single process and need more performance.)
+Here you can override the storage's L<buffer> parameter by passing C<< buffer => 0|1 >> as a second parameter.
 
 =cut
 sub in {
