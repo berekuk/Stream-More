@@ -56,7 +56,7 @@ sub new {
         max_log_size => 0,
         buffer_class => { default => 'Stream::Buffer::File' },
     });
-    my $self = {};
+    my $self = { max_chunk_size => $opts->{max_chunk_size} };
     bless $self => $class;
     $self->{in} = ref $in eq "CODE" ? $in : sub { $in };
 
@@ -69,15 +69,18 @@ sub new {
 sub read_chunk {
     my $self = shift;
     my ($limit) = @_;
+    my $remain = ($self->{max_chunk_size} || $limit);
 
     my $result = [];
     push @$result, @{$self->{buffer}->load($limit)};
     $limit -= @$result;
+    $remain -= @$result;
     return $result if $limit <= 0;
 
     my $in = $self->{in}->();
     # $in is supposed to be thread-safe
-    my $chunk = $in->read_chunk($limit); #TODO: load some more in advance?
+    my $chunk = $in->read_chunk( $remain );
+
     if ($chunk) {
         if (@$chunk) {
             $self->{buffer}->save($chunk);

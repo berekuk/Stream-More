@@ -7,6 +7,7 @@ use parent qw(Test::Class);
 use Test::More;
 use Test::Deep;
 use Test::Fatal;
+use Test::MockObject;
 
 use lib 'lib';
 use PPB::Test::TFiles;
@@ -272,6 +273,24 @@ sub buffer_file :Tests {
     is($item->[1], "d\n");
     $item = $mq->read();
     is($item->[1], "e\n", "broken line already removed");
+}
+
+sub commit_chunk :Tests {
+    my $self = shift;
+    my $commit_count = 0;
+
+    my $in = Test::MockObject->new;
+    $in->mock( 'commit', sub { $commit_count++; } );
+    $in->mock( 'read', sub { return "1\n"; } );
+    $in->mock( 'read_chunk', sub { my $self = shift; my $limit = shift; return [("a\n")x$limit]; } );
+    $in->set_isa("Stream::In");
+
+    my $mq = $self->_buffer($in, { max_chunk_size => 10 });
+    for ( 1 .. 10 ) {
+        $mq->read;
+    }
+
+    is( $commit_count, 1, "commiting by chunk");
 }
 
 __PACKAGE__->new(buffer_class => 'Stream::Buffer::Persistent')->runtests;

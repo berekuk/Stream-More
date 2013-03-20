@@ -1,3 +1,9 @@
+libstream-more-perl (0.14.7) unstable; urgency=low
+
+  * In::Buffer, commit by chunks
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Wed, 20 Mar 2013 19:26:41 +0400
+
 libstream-more-perl (0.14.6) unstable; urgency=low
 
   * don't ask for oppupancy of broken hosts
