@@ -8,8 +8,10 @@ Moose-based input streams should implement this role.
 
 =cut
 
-use Moose::Role;
-with 'Stream::Moose::FakeIsa' => { extra => ['Stream::In'] };
+use Moo::Role;
+
+use Stream::Moose::FakeIsa;
+with FakeIsa('Stream::In');
 
 requires 'read', 'read_chunk', 'commit';
 

@@ -9,7 +9,10 @@ Moose-based stream filters should implement this role.
 =cut
 
 use Moose::Role;
-with 'Stream::Moose::FakeIsa' => { extra => ['Stream::Filter'] };
+
+use Stream::Moose::FakeIsa;
+with FakeIsa('Stream::Filter');
+
 use MooseX::MarkAsMethods autoclean => 1;
 
 use Stream::Filter;
