@@ -56,7 +56,7 @@ sub new {
         max_log_size => 0,
         buffer_class => { default => 'Stream::Buffer::File' },
     });
-    my $self = {};
+    my $self = { max_chunk_size => $opts->{max_chunk_size}, active_size => 0 };
     bless $self => $class;
     $self->{in} = ref $in eq "CODE" ? $in : sub { $in };
 
@@ -69,15 +69,21 @@ sub new {
 sub read_chunk {
     my $self = shift;
     my ($limit) = @_;
+    my $remain = ( $self->{max_chunk_size} ) ? $self->{max_chunk_size} - $self->{active_size} : $limit;
 
     my $result = [];
     push @$result, @{$self->{buffer}->load($limit)};
     $limit -= @$result;
-    return $result if $limit <= 0;
+    $remain -= @$result;
+    if ( $limit <= 0 ) {
+        $self->{active_size} += @$result;
+        return $result;
+    }
 
     my $in = $self->{in}->();
     # $in is supposed to be thread-safe
-    my $chunk = $in->read_chunk($limit); #TODO: load some more in advance?
+    my $chunk = $in->read_chunk( ( $remain > $limit ) ? $remain : $limit );
+
     if ($chunk) {
         if (@$chunk) {
             $self->{buffer}->save($chunk);
@@ -87,6 +93,8 @@ sub read_chunk {
     }
 
     return unless @$result;
+
+    $self->{active_size} += @$result;
     return $result;
 }
 
@@ -103,6 +111,7 @@ sub commit {
 
     return unless $ids; # process($mq => code_out(sub { [$id, $item] = shift; ... $mq->commit([$id]) }));
 
+    $self->{active_size} -= @$ids;
     $self->{buffer}->delete($ids);
 }
 
