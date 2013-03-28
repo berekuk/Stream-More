@@ -1,3 +1,9 @@
+libstream-more-perl (0.14.9) unstable; urgency=low
+
+  * RoundRobin buffer (storage level) 
+
+ -- Strelkova Natalia <skalolazka@yandex-team.ru>  Wed, 27 Mar 2013 17:32:44 +0400
+
 libstream-more-perl (0.14.8) unstable; urgency=low
 
   * In::Buffer, commit by chunks

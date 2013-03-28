@@ -49,7 +49,7 @@ has 'dir' => (
 
 Data size in bytes.
 
-RoundRobin storage always occupy this amount of space on disk (more or less).
+RoundRobin storage always occupies this amount of space on disk (more or less).
 
 Default is 1GB.
 
@@ -97,6 +97,18 @@ has 'buffer_size' => (
         $buffer_size = 10 * 1024 * 1024 if $buffer_size > 10 * 1024 * 1024;
         return $buffer_size;
     },
+);
+
+=item B< buffer >
+
+Buffer attribute. 1 by default, with this setting input streams are wrapped in L<Stream::In::DuskBuffer> for convenience. If set to zero, all input streams are just raw L<Stream::RoundRobin::In> objects (this can be useful, for example, if you process data in a single process and need more performance.)
+
+=cut
+
+has 'buffer' => (
+    is => 'ro',
+    isa => 'Bool',
+    default => 1,
 );
 
 sub _mkdir_unless_exists {
@@ -241,7 +253,7 @@ sub commit {
         size => $self->data_size,
         positions => {
             "storage's own" => $old_position,
-            map { $_ => $self->in($_)->in->position } $self->client_names,
+            map { $_ => $self->buffer ? $self->in($_)->in->position : $self->in($_)->position } $self->client_names,
         },
     );
 
@@ -287,7 +299,7 @@ sub register_client {
 
     INFO "Registering $name at ".$self->dir;
     $self->_mkdir_unless_exists($self->dir."/clients/$name");
-    $self->in($name)->in->commit; # create client state
+    return $self->buffer ? $self->in($name)->in->commit : $self->in($name)->commit; # create client state
 }
 
 sub unregister_client {
@@ -308,8 +320,7 @@ sub unregister_client {
 
 Get input stream by a client name.
 
-Input streams are wrapped in L<Stream::In::DuskBuffer> for convinience. You can pass C<< buffer => 0 >> as a second parameter to avoid this and get a raw L<Stream::In::DiskBuffer> object.
-(This can be useful, for example, if you process data in a single process and need more performance.)
+Here you can override the storage's L<buffer> parameter by passing C<< buffer => 0|1 >> as a second parameter.
 
 =cut
 sub in {
@@ -325,7 +336,7 @@ sub in {
 
     my $in = Stream::RoundRobin::In->new(storage => $self, name => $client);
 
-    if ($use_buffer) {
+    if ((defined($other->{buffer}) && $use_buffer) || (!defined($other->{buffer}) && $self->buffer)) {
         return Stream::In::DiskBuffer->new(
             $in  => $self->dir."/clients/$client/buffer",
             {
