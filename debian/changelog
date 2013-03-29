@@ -1,3 +1,9 @@
+libstream-more-perl (0.14.10) unstable; urgency=low
+
+  * fix dropping invalids on update
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Fri, 29 Mar 2013 14:19:47 +0400
+
 libstream-more-perl (0.14.9) unstable; urgency=low
 
   * RoundRobin buffer (storage level) 

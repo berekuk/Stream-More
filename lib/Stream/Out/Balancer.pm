@@ -163,7 +163,6 @@ sub _next_target {
 
     if ($self->{timestamp} < $time - $self->{cache_period}) { # refresh once in a minute
         $self->{indexes} = [ $self->_indexes() ];
-        $self->{invalid} = [];
         $self->{timestamp} = $time;
         $self->{w_total} = scalar @{ $self->{indexes} };
     }
