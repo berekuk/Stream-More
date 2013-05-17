@@ -163,13 +163,20 @@ sub _new_chunk {
 
     my $in = $self->in;
 
-    my $data = $in->read_chunk($chunk_size);
-    return unless $data;
-    return unless @$data;
+    my @data;
+
+    while (@data < $chunk_size) {
+        my $read_data = $in->read_chunk($chunk_size - @data);
+        last unless $read_data;
+        last unless @$read_data;
+        push @data, @$read_data;
+        last if @data >= $chunk_size;
+    }
+    return unless @data;
 
     my $new_id = $self->_next_id;
     my $chunk = $self->_chunk($new_id);
-    $chunk->create($data);
+    $chunk->create(\@data);
     $in->commit;
 
     return $new_id;
