@@ -163,13 +163,23 @@ sub _new_chunk {
 
     my $in = $self->in;
 
-    my $data = $in->read_chunk($chunk_size);
-    return unless $data;
-    return unless @$data;
+    my @data;
+
+    while (@data < $chunk_size) {
+        my $read_data = $in->read_chunk($chunk_size - @data);
+        last unless $read_data;
+        last unless @$read_data;
+        push @data, @$read_data;
+    }
+    if (@data < $chunk_size) {
+        # ood - out-of-data
+        $self->{ood} = 1 if $self->{uncommited};
+    }
+    return unless @data;
 
     my $new_id = $self->_next_id;
     my $chunk = $self->_chunk($new_id);
-    $chunk->create($data);
+    $chunk->create(\@data);
     $in->commit;
 
     return $new_id;
@@ -188,6 +198,8 @@ sub _load_chunk {
 
 sub _next_chunk {
     my $self = shift;
+
+    return if $self->{ood};
 
     my $try_chunk = sub {
         my $chunk_name = shift;
@@ -294,6 +306,7 @@ sub commit {
     $_->remove for values %{ $self->{prev_chunks} };
     $self->{prev_chunks} = {};
     $self->{uncommited} = 0;
+    delete $self->{ood};
 
     return;
 }

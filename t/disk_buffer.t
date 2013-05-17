@@ -263,5 +263,63 @@ sub permissions :Tests {
     is sprintf("%o", $stat[2] & 0777), '644';
 }
 
+sub chunk_size_on_out_of_data_in :Tests {
+    {
+        package In::OOD;
+
+        use strict;
+        use warnings;
+
+        use parent qw(Stream::In);
+
+        sub new {
+            my $class = shift;
+            return bless { chunks => \@_ } => $class;
+        }
+
+        sub read_chunk {
+            my $self = shift;
+            return shift @{ $self->{chunks} };
+        }
+
+        sub read {
+            die "read is not supported";
+        }
+
+        sub add {
+            my $self = shift;
+            my ($chunk) = @_;
+            push @{ $self->{chunks} }, $chunk;
+        }
+
+        sub commit {}
+    }
+
+    {
+        my $in = In::OOD->new(
+            map { ["i$_"] } 1..100
+        );
+
+        my $buffered_in = Stream::In::DiskBuffer->new($in, 'tfiles/buffer');
+        $buffered_in->read for 1..100;
+
+        my @chunks = glob('tfiles/buffer/*.chunk');
+        cmp_ok scalar(@chunks), '<', 30;
+    }
+
+    PPB::Test::TFiles->import;
+    {
+        my $in = In::OOD->new();
+
+        my $buffered_in = Stream::In::DiskBuffer->new($in, 'tfiles/buffer');
+        for (1..100) {
+            $buffered_in->read;
+            $in->add(["i$_"]);
+        }
+
+        my @chunks = glob('tfiles/buffer/*.chunk');
+        cmp_ok scalar(@chunks), '<', 30;
+    }
+}
 
 __PACKAGE__->new->runtests;
