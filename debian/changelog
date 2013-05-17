@@ -1,3 +1,9 @@
+libstream-more-perl (0.14.11) unstable; urgency=low
+
+  * DiskBuffer: don't create many small chunks if $in is almost out of data
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Fri, 17 May 2013 18:07:07 +0400
+
 libstream-more-perl (0.14.10) unstable; urgency=low
 
   * fix dropping invalids on update
