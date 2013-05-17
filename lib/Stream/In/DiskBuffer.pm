@@ -173,6 +173,7 @@ sub _new_chunk {
         last if @data >= $chunk_size;
     }
     return unless @data;
+    $self->{ood} = 1 unless @data >= $chunk_size;
 
     my $new_id = $self->_next_id;
     my $chunk = $self->_chunk($new_id);
@@ -195,6 +196,8 @@ sub _load_chunk {
 
 sub _next_chunk {
     my $self = shift;
+
+    return if $self->{ood};
 
     my $try_chunk = sub {
         my $chunk_name = shift;
@@ -301,6 +304,7 @@ sub commit {
     $_->remove for values %{ $self->{prev_chunks} };
     $self->{prev_chunks} = {};
     $self->{uncommited} = 0;
+    delete $self->{ood};
 
     return;
 }

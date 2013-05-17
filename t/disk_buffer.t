@@ -286,18 +286,40 @@ sub chunk_size_on_out_of_data_in :Tests {
             die "read is not supported";
         }
 
+        sub add {
+            my $self = shift;
+            my ($chunk) = @_;
+            push @{ $self->{chunks} }, $chunk;
+        }
+
         sub commit {}
     }
 
-    my $in = In::OOD->new(
-        map { ["i$_"] } 1..100
-    );
+    {
+        my $in = In::OOD->new(
+            map { ["i$_"] } 1..100
+        );
 
-    my $buffered_in = Stream::In::DiskBuffer->new($in, 'tfiles/buffer');
-    $buffered_in->read for 1..100;
+        my $buffered_in = Stream::In::DiskBuffer->new($in, 'tfiles/buffer');
+        $buffered_in->read for 1..100;
 
-    my @chunks = glob('tfiles/buffer/*.chunk');
-    cmp_ok scalar(@chunks), '<', 30;
+        my @chunks = glob('tfiles/buffer/*.chunk');
+        cmp_ok scalar(@chunks), '<', 30;
+    }
+
+    PPB::Test::TFiles->import;
+    {
+        my $in = In::OOD->new();
+
+        my $buffered_in = Stream::In::DiskBuffer->new($in, 'tfiles/buffer');
+        for (1..100) {
+            $buffered_in->read;
+            $in->add(["i$_"]);
+        }
+
+        my @chunks = glob('tfiles/buffer/*.chunk');
+        cmp_ok scalar(@chunks), '<', 30;
+    }
 }
 
 __PACKAGE__->new->runtests;
