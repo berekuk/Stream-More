@@ -170,10 +170,9 @@ sub _new_chunk {
         last unless $read_data;
         last unless @$read_data;
         push @data, @$read_data;
-        last if @data >= $chunk_size;
     }
     return unless @data;
-    $self->{ood} = 1 unless @data >= $chunk_size;
+    $self->{ood} = 1 if @data < $chunk_size;
 
     my $new_id = $self->_next_id;
     my $chunk = $self->_chunk($new_id);
