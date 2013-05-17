@@ -171,8 +171,11 @@ sub _new_chunk {
         last unless @$read_data;
         push @data, @$read_data;
     }
+    if (@data < $chunk_size) {
+        # ood - out-of-data
+        $self->{ood} = 1 if $self->{uncommited};
+    }
     return unless @data;
-    $self->{ood} = 1 if @data < $chunk_size;
 
     my $new_id = $self->_next_id;
     my $chunk = $self->_chunk($new_id);
