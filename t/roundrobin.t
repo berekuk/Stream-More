@@ -239,7 +239,10 @@ sub race :Tests {
             while () {
                 last if time >= $time + 2;
                 my $line = $in->read;
-                next unless $line;
+                unless ($line) {
+                    $in->commit;
+                    next;
+                }
                 xprint($out, $line);     
             }
             $in->commit;
