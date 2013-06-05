@@ -478,13 +478,14 @@ sub description {
 
 =cut
 
+use Stream::Moose::Role::AutoOwned;
 with
     'Stream::Moose::Storage',
     'Stream::Moose::Out::Easy',
     'Stream::Moose::Out::ReadOnly',
     'Stream::Moose::Storage::ClientList',
     'Stream::Moose::Storage::AutoregisterClients',
-    'Stream::Moose::Role::AutoOwned' => { file_method => '_meta_file' },
+    AutoOwned(file_method => '_meta_file'),
     'Stream::Moose::Role::Description',
 ;
 

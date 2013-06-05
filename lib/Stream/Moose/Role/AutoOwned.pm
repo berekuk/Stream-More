@@ -2,19 +2,22 @@ package Stream::Moose::Role::AutoOwned;
 
 # ABSTRACT: specialization of ::Role::Owned which detects owner by *nix file owner
 
-use MooseX::Role::Parameterized;
+use strict;
+use warnings;
 
-parameter 'file_method' => (
-    is => 'ro',
-    required => 1,
-);
+use Package::Variant
+    importing => ['Moo::Role'],
+    subs => [qw( requires with )];
 
-role {
-    my $p = shift;
-    my $file_method = $p->file_method;
+sub make_variant {
+    my ($class, $target_package, %params) = @_;
+
+    $params{file_method} or die "'file_method' parameter expected";
+    my $file_method = $params{file_method};
+
     requires $file_method;
 
-    method '_build_owner_uid' => sub {
+    install '_build_owner_uid' => sub {
         my $self = shift;
         my $file = $self->$file_method;
 
@@ -25,7 +28,7 @@ role {
         return $uid;
     };
 
-    method '_build_owner' => sub {
+    install '_build_owner' => sub {
         my $self = shift;
         return scalar getpwuid $self->owner_uid;
     };
