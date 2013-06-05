@@ -78,6 +78,29 @@ sub coro_filter_test :Test(1) {
     ok coro_filter(5 => filter {})->isa('Stream::Filter::Coro');
 }
 
+sub coro_out_die :Test(1) {
+    use Coro::AnyEvent;
+
+    my $code_out = sub {
+        return code_out(
+            sub {
+                Coro::AnyEvent::sleep(2);
+                die "test die";
+            }
+        )
+    };
+
+    my $coro_out = coro_out(3 => $code_out);
+
+    throws_ok(sub {
+        process(
+            array_in([ 1 .. 5 ])
+            => $coro_out,
+            { commit => 0 },
+        );
+    }, qr/test die/, 'coro_out throws exception when there is an exception in nested sub');
+}
+
 sub coro_out_test :Test(5) {
     my $id = 0;
     my %res_hash;

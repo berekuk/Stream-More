@@ -24,6 +24,12 @@ has 'threads' => (
     required => 1,
 );
 
+has 'alive_threads' => (
+    is => 'rw',
+    isa => 'Int',
+    default => 0,
+);
+
 has 'chunk_size' => (
     is => 'ro',
     isa => 'Int',
@@ -94,8 +100,18 @@ sub _build__coros {
                 }
                 1;
             };
-            $out->put({ exception => $@ }) unless $ok;
+            unless ( $ok ) {
+                my $err = $@;
+
+                $self->alive_threads( $self->alive_threads - 1 );
+                if ( !$self->alive_threads && $in->size ) {
+                    $in->get while ( $in->size );
+                    # empty "in" queue, because we don't have enough alive workers to cope with it
+                }
+                $out->put({ exception => $err })
+            }
         });
+        $self->alive_threads( $self->alive_threads + 1 );
     }
     return \@coros;
 }
@@ -133,6 +149,7 @@ sub write {
     my $self = shift;
     my ($item) = @_; # TODO - support additional parameters somehow?
     $self->_coros; # force coros reconstruction after commit
+    die "no alive threads" unless $self->alive_threads;
     $self->_in_channel->put({ action => 'write', item => $item });
     Coro::cede();
     return $self->_read_all;
@@ -142,7 +159,7 @@ sub commit {
     my $self = shift;
     return unless $self->_has_coros;
 
-    $self->_in_channel->put({ action => 'commit' }) for 1 .. $self->threads;
+    $self->_in_channel->put({ action => 'commit' }) for 1 .. $self->alive_threads;
     $_->join for @{ $self->_coros };
     my @result = $self->_read_all;
 
