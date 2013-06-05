@@ -160,7 +160,10 @@ sub commit {
     return unless $self->_has_coros;
 
     $self->_in_channel->put({ action => 'commit' }) for 1 .. $self->alive_threads;
-    $_->join for @{ $self->_coros };
+    for ( @{ $self->_coros } ) {
+        $_->join;
+        $self->alive_threads( $self->alive_threads - 1 );
+    }
     my @result = $self->_read_all;
 
     $self->_clear_coros;
