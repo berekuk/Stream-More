@@ -1,3 +1,9 @@
+libstream-more-perl (0.14.12) unstable; urgency=low
+
+  * fix Coro::Filter locking
+
+ -- Serge Toropov <sombr@yandex-team.ru>  Wed, 05 Jun 2013 13:11:39 +0400
+
 libstream-more-perl (0.14.11) unstable; urgency=low
 
   * DiskBuffer: don't create many small chunks if $in is almost out of data
