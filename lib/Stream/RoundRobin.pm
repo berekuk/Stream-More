@@ -366,13 +366,14 @@ sub description {
 See the sources for the list of roles this module implements.
 
 =cut
+use Stream::Moose::Role::AutoOwned;
 with
     'Stream::Moose::Storage',
     'Stream::Moose::Storage::ClientList', # register_client/unregister_client/client_names methods
     'Stream::Moose::Storage::AutoregisterClients',
     'Stream::Moose::Out::Chunked', # provides 'write' implementation
     'Stream::Moose::Out::ReadOnly', # provides check_read_only and calls it before write/write_chunk/commit
-    'Stream::Moose::Role::AutoOwned' => { file_method => 'dir' }, # provides owner/owner_uid
+    AutoOwned(file_method => 'dir'), # provides owner/owner_uid
     'Stream::Moose::Role::Description',
 ;
 

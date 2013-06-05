@@ -9,9 +9,10 @@ Moose-based output streams should implement this role.
 =cut
 
 use Moo::Role;
-
 use Stream::Moose::FakeIsa;
 with FakeIsa('Stream::Out');
+
+use namespace::clean;
 
 requires 'write', 'write_chunk', 'commit';
 

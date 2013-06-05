@@ -3,7 +3,8 @@ package Stream::RoundRobin::In;
 # ABSTRACT: input stream for Stream::RoundRobin storage
 
 use Moo;
-use MooX::Types::MooseLike::Base qw( Int Bool Str InstanceOf );
+use Types::Standard qw( Int Bool Str );
+use Type::Utils qw(class_type);
 
 use autodie qw( open seek ); # can't import everything - read messes with stream's read method
 use Fcntl qw( SEEK_SET SEEK_CUR SEEK_END );
@@ -15,7 +16,7 @@ use Stream::RoundRobin::Types qw(:all);
 
 has 'storage' => (
     is => 'ro',
-    isa => InstanceOf('Stream::RoundRobin'),
+    isa => class_type { class => 'Stream::RoundRobin' },
     required => 1,
 );
 
@@ -37,8 +38,8 @@ has 'dir' => (
 
 
 has 'lock' => (
-    is => 'ro',
-    lazy_build => 1,
+    is => 'lazy',
+    clearer => 1,
 );
 
 sub _build_lock {
@@ -49,7 +50,9 @@ sub _build_lock {
 has 'position' => (
     is => 'rw',
     isa => Int,
-    lazy_build => 1,
+    lazy => 1,
+    clearer => 1,
+    builder => 1,
 );
 
 has 'commited' => (

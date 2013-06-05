@@ -7,7 +7,8 @@ package Stream::Moose::Role::Owned;
 # (see also Stream::Moose::Role::ReadOnly)
 
 use Moo::Role;
-use MooX::Types::MooseLike::Base qw( Int Str );
+use Types::Standard qw( Int Str );
+use namespace::clean;
 
 around DOES => sub {
     my ($orig, $self) = (shift, shift);
@@ -25,12 +26,14 @@ around DOES => sub {
 
 has 'owner' => (
     is => 'lazy',
-    isa => Str,
+# TODO, commented due to issue https://rt.cpan.org/Ticket/Display.html?id=85895
+#    isa => Str,
 );
 
 has 'owner_uid' => (
     is => 'lazy',
-    isa => Int,
+# TODO, commented due to issue https://rt.cpan.org/Ticket/Display.html?id=85895
+#    isa => Int,
 );
 
 1;

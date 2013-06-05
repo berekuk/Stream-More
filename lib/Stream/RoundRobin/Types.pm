@@ -5,19 +5,17 @@ package Stream::RoundRobin::Types;
 use strict;
 use warnings;
 
-use parent qw(Exporter);
+use Type::Library
+    -base,
+    -declare => qw( ClientName );
+use Type::Utils;
+use Types::Standard qw( Str );
 
-our @EXPORT_OK = qw( ClientName );
-our %EXPORT_TAGS = (
-    'all' => \@EXPORT_OK
-);
-
-use MooseX::Types::Moose qw( Str );
-
-sub ClientName {
-    sub {
-        $_[0] =~ /^[\w\.-]+$/ or die "Invalid client name '$_[0]'";
-    }
-}
+declare ClientName,
+    as Str,
+    where {
+        /^[\w\.-]+$/
+    },
+    message {"Invalid client name '$_'" };
 
 1;
