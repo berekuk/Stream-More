@@ -8,6 +8,8 @@ Moose-based output streams should implement this role.
 
 =cut
 
+use UNIVERSAL::DOES;
+
 use Moo::Role;
 use Stream::Moose::FakeIsa;
 with FakeIsa('Stream::Out');

@@ -2,11 +2,8 @@ package Stream::RoundRobin;
 
 # ABSTRACT: local RoundRobin-style string storage
 
-use namespace::autoclean;
-
-use Moose;
+use Moo;
 use MooseX::Params::Validate;
-use Moose::Util::TypeConstraints;
 
 use autodie qw(:all);
 use IPC::System::Simple;
@@ -25,6 +22,11 @@ use Stream::RoundRobin::In;
 
 use Stream::In::DiskBuffer;
 
+use Types::Standard qw( Str Int Bool Dict Optional );
+use Type::Params qw( validate );
+
+use namespace::clean;
+
 sub isa {
     return 1 if $_[1] eq __PACKAGE__;
     $_[0]->next::method if $_[0]->next::can;
@@ -41,7 +43,7 @@ Dir to store data. Required.
 =cut
 has 'dir' => (
     is => 'ro',
-    isa => 'Str',
+    isa => Str,
     required => 1,
 );
 
@@ -56,7 +58,7 @@ Default is 1GB.
 =cut
 has 'data_size' => (
     is => 'ro',
-    isa => 'Int',
+    isa => Int,
     default => 1024 * 1024 * 1024, # 1GB
 );
 
@@ -89,7 +91,7 @@ Default is 5% of C< data_size > or 10MB whichever is less.
 
 has 'buffer_size' => (
     is => 'ro',
-    isa => 'Int',
+    isa => Int,
     lazy => 1, # depends on $self->data_size
     default => sub {
         my $self = shift;
@@ -107,7 +109,7 @@ Buffer attribute. 1 by default, with this setting input streams are wrapped in L
 
 has 'buffer' => (
     is => 'ro',
-    isa => 'Bool',
+    isa => Bool,
     default => 1,
 );
 
@@ -242,7 +244,7 @@ sub commit {
     # let's check that new data will fit in the storage
     my $buffer_length = length $$buffer_ref;
     if ($buffer_length >= $self->data_size) {
-        confess "buffer is too large ($buffer_length bytes, ".$self->_buffer_lines." lines)"
+        die "buffer is too large ($buffer_length bytes, ".$self->_buffer_lines." lines)"
     }
     my $left = int(sysseek($fh, 0, SEEK_CUR));
     my $right = $left + $buffer_length;
@@ -287,7 +289,7 @@ sub has_client {
 
 sub register_client {
     my $self = shift;
-    my ($name) = pos_validated_list(\@_, { isa => ClientName });
+    my ($name) = validate(\@_, ClientName);
     $self->check_read_only();
 
     # check if already registered
@@ -304,7 +306,7 @@ sub register_client {
 
 sub unregister_client {
     my $self = shift;
-    my ($client) = pos_validated_list(\@_, { isa => ClientName });
+    my ($client) = validate(\@_, ClientName);
     $self->check_read_only();
     unless ($self->has_client($client)) {
         WARN "No such client '$client', can't unregister";
@@ -325,14 +327,16 @@ Here you can override the storage's L<buffer> parameter by passing C<< buffer =>
 =cut
 sub in {
     my $self = shift;
-    my ($client, $other) = pos_validated_list(\@_,
-        { isa => ClientName },
-        { isa => 'HashRef', default => {} },
+    my ($client, $other) = validate(\@_,
+        ClientName,
+        Optional[Dict[
+            buffer => Optional[Bool],
+        ]]
     );
-    my ($use_buffer) = validated_list([ %$other ],
-        buffer => { isa => 'Bool', default => 1 },
-        MX_PARAMS_VALIDATE_CACHE_KEY => 'roundrobin-in-additional-options-validation', # sorry; see MooseX::Params::Validate docs
-    );
+
+    $other ||= {};
+    my $use_buffer = 1;
+    $use_buffer = $other->{buffer} if defined $other->{buffer};
 
     my $in = Stream::RoundRobin::In->new(storage => $self, name => $client);
 
@@ -368,13 +372,13 @@ See the sources for the list of roles this module implements.
 =cut
 use Stream::Moose::Role::AutoOwned;
 with
+    'Stream::Moose::Out::Chunked', # provides 'write' implementation
     'Stream::Moose::Storage',
     'Stream::Moose::Storage::ClientList', # register_client/unregister_client/client_names methods
     'Stream::Moose::Storage::AutoregisterClients',
-    'Stream::Moose::Out::Chunked', # provides 'write' implementation
     'Stream::Moose::Out::ReadOnly', # provides check_read_only and calls it before write/write_chunk/commit
     AutoOwned(file_method => 'dir'), # provides owner/owner_uid
     'Stream::Moose::Role::Description',
 ;
 
-__PACKAGE__->meta->make_immutable;
+1;
