@@ -23,7 +23,7 @@ use Stream::RoundRobin::In;
 use Stream::In::DiskBuffer;
 
 use Types::Standard qw( Str Int Bool Dict Optional );
-use Type::Params qw( validate );
+use Type::Params qw( compile );
 
 use namespace::clean;
 
@@ -287,33 +287,39 @@ sub has_client {
     return -d $self->dir."/clients/$name";
 }
 
-sub register_client {
-    my $self = shift;
-    my ($name) = validate(\@_, ClientName);
-    $self->check_read_only();
+{
+    my $_check = compile(ClientName);
+    sub register_client {
+        my $self = shift;
+        my ($name) = $_check->(@_);
+        $self->check_read_only();
 
-    # check if already registered
-    # we check first without locking the whole storage because auto-registering may be enabled, and lock can be undesirable
-    # (or maybe this is a premature optimization)
-    return if $self->has_client($name);
+        # check if already registered
+        # we check first without locking the whole storage because auto-registering may be enabled, and lock can be undesirable
+        # (or maybe this is a premature optimization)
+        return if $self->has_client($name);
 
-    my $lock = $self->_lock; # in case initial 'data' generation happens right now
+        my $lock = $self->_lock; # in case initial 'data' generation happens right now
 
-    INFO "Registering $name at ".$self->dir;
-    $self->_mkdir_unless_exists($self->dir."/clients/$name");
-    return $self->buffer ? $self->in($name)->in->commit : $self->in($name)->commit; # create client state
+        INFO "Registering $name at ".$self->dir;
+        $self->_mkdir_unless_exists($self->dir."/clients/$name");
+        return $self->buffer ? $self->in($name)->in->commit : $self->in($name)->commit; # create client state
+    }
 }
 
-sub unregister_client {
-    my $self = shift;
-    my ($client) = validate(\@_, ClientName);
-    $self->check_read_only();
-    unless ($self->has_client($client)) {
-        WARN "No such client '$client', can't unregister";
-        return;
+{
+    my $_check = compile(ClientName);
+    sub unregister_client {
+        my $self = shift;
+        my ($client) = $_check->(@_);
+        $self->check_read_only();
+        unless ($self->has_client($client)) {
+            WARN "No such client '$client', can't unregister";
+            return;
+        }
+        INFO "Unregistering $client at ".$self->dir;
+        system('rm', '-rf', '--', $self->dir."/clients/$client");
     }
-    INFO "Unregistering $client at ".$self->dir;
-    system('rm', '-rf', '--', $self->dir."/clients/$client");
 }
 
 =item B< in($client) >
@@ -325,33 +331,36 @@ Get input stream by a client name.
 Here you can override the storage's L<buffer> parameter by passing C<< buffer => 0|1 >> as a second parameter.
 
 =cut
-sub in {
-    my $self = shift;
-    my ($client, $other) = validate(\@_,
+{
+    my $_check = compile(
         ClientName,
         Optional[Dict[
             buffer => Optional[Bool],
         ]]
     );
+    sub in {
+        my $self = shift;
+        my ($client, $other) = $_check->(@_);
 
-    $other ||= {};
-    my $use_buffer = 1;
-    $use_buffer = $other->{buffer} if defined $other->{buffer};
+        $other ||= {};
+        my $use_buffer = 1;
+        $use_buffer = $other->{buffer} if defined $other->{buffer};
 
-    my $in = Stream::RoundRobin::In->new(storage => $self, name => $client);
+        my $in = Stream::RoundRobin::In->new(storage => $self, name => $client);
 
-    if ((defined($other->{buffer}) && $use_buffer) || (!defined($other->{buffer}) && $self->buffer)) {
-        return Stream::In::DiskBuffer->new(
-            $in  => $self->dir."/clients/$client/buffer",
-            {
-                read_only => $self->read_only,
-                format => 'plain',
-                read_lock => 0, # RoundRobin::In locks itself
-            }
-        );
+        if ((defined($other->{buffer}) && $use_buffer) || (!defined($other->{buffer}) && $self->buffer)) {
+            return Stream::In::DiskBuffer->new(
+                $in  => $self->dir."/clients/$client/buffer",
+                {
+                    read_only => $self->read_only,
+                    format => 'plain',
+                    read_lock => 0, # RoundRobin::In locks itself
+                }
+            );
+        }
+
+        return $in;
     }
-
-    return $in;
 }
 
 sub description {
