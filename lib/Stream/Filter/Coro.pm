@@ -100,14 +100,15 @@ sub _build__coros {
                 }
                 1;
             };
+            $self->alive_threads( $self->alive_threads - 1 );
             unless ( $ok ) {
                 my $err = $@;
 
-                $self->alive_threads( $self->alive_threads - 1 );
                 if ( !$self->alive_threads && $in->size ) {
                     $in->get while ( $in->size );
                     # empty "in" queue, because we don't have enough alive workers to cope with it
                 }
+
                 $out->put({ exception => $err })
             }
         });
