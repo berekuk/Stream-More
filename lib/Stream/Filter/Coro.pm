@@ -80,6 +80,7 @@ sub _build__coros {
     my @coros;
     my $in = $self->_in_channel;
     my $out = $self->_out_channel;
+    $self->alive_threads(0);
     for my $i (1 .. $self->threads) {
         my $filter = $self->filter->();
         push @coros, Coro::async(sub {
