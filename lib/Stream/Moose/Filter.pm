@@ -4,16 +4,14 @@ package Stream::Moose::Filter;
 
 =head1 DESCRIPTION
 
-Moose-based stream filters should implement this role.
+Moo-based stream filters should implement this role.
 
 =cut
 
-use Moose::Role;
+use Moo::Role;
 
 use Stream::Moose::FakeIsa;
 with FakeIsa('Stream::Filter');
-
-use MooseX::MarkAsMethods autoclean => 1;
 
 use Stream::Filter;
 use overload

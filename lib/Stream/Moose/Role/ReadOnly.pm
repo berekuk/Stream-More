@@ -5,12 +5,15 @@ package Stream::Moose::Role::ReadOnly;
 # There is nothing stream-specific in this role, actually.
 # We could refactor it into some overly-abstract Role::ReadOnly::OwnerBased role in the future.
 
-use Moose::Role;
+use Moo::Role;
 with 'Stream::Moose::Role::Owned';
+
+use Types::Standard qw(Bool);
+use Carp qw(confess);
 
 has 'read_only' => (
     is => 'ro',
-    isa => 'Bool',
+    isa => Bool,
     lazy_build => 1,
 );
 

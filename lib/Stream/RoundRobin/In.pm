@@ -6,7 +6,7 @@ use Moo;
 use Types::Standard qw( Int Bool Str );
 use Type::Utils qw(class_type);
 
-use autodie qw( open seek ); # can't import everything - read messes with stream's read method
+use autodie qw( open seek ); # can't import everything - read messes with stream's read method; also, importing everything is *slow*
 use Fcntl qw( SEEK_SET SEEK_CUR SEEK_END );
 
 use Yandex::Persistent;

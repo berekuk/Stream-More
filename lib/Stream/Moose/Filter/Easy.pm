@@ -21,9 +21,11 @@ Note that this role doesn't implement buffering!
 
 =cut
 
-use namespace::autoclean;
-use Moose::Role;
+use Moo::Role;
 with 'Stream::Moose::Filter';
+
+use Carp qw(confess);
+use namespace::clean;
 
 sub write_chunk {
     my ($self, $chunk) = @_;

@@ -2,7 +2,7 @@ package Stream::Moose::Out::Easy;
 
 # ABSTRACT: role to implement output streams with only one write() method
 
-use Moose::Role;
+use Moo::Role;
 with 'Stream::Moose::Out';
 
 sub write_chunk($$;$) {

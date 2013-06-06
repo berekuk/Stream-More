@@ -6,7 +6,7 @@ package Stream::Moose::Out::Buffered;
 
     package MyOut;
 
-    use Moose;
+    use Moo;
     with 'Stream::Moose::Out::Buffered';
 
     sub write_chunk {
@@ -16,13 +16,15 @@ package Stream::Moose::Out::Buffered;
 
 =cut
 
-use Moose::Role;
+use Moo::Role;
 with 'Stream::Moose::Out::Chunked';
+
+use Types::Standard qw(Int);
 
 has 'buffer_size' => (
     is => 'ro',
-    isa => 'Int',
-    default => 100,
+    isa => Int,
+    default => sub { 100 },
 );
 
 has '_buffer' => (
@@ -32,7 +34,7 @@ has '_buffer' => (
 
 has '_bufferize' => (
     is => 'rw',
-    default => 1,
+    default => sub { 1 },
 );
 
 around 'write_chunk' => sub {

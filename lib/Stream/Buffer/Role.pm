@@ -2,8 +2,9 @@ package Stream::Buffer::Role;
 
 # ABSTRACT: role for any Stream::Buffer::* classes
 
-use namespace::autoclean;
-use Moose::Role;
+use Moo::Role;
+
+use namespace::clean;
 
 =head1 METHODS
 

@@ -2,11 +2,18 @@ package Stream::Moose::Storage::Occupancy;
 
 # ABSTRACT: role for storages that are able to measure their occupancy
 
-use Moose::Role;
+use Moo::Role;
 with 'Stream::Moose::Storage';
 
-use Class::DOES::Moose;
-extra_does 'Stream::Storage::Role::Occupancy';
+use namespace::clean;
+
+around DOES => sub {
+    my ($orig, $self) = (shift, shift);
+    my ($class) = @_;
+
+    return 1 if $class eq 'Stream::Storage::Role::Occupancy';
+    return $self->$orig(@_);
+};
 
 =over
 

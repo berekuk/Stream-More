@@ -2,7 +2,7 @@ package Stream::Moose::In::Easy;
 
 # ABSTRACT: role to implement input streams with only one read() method
 
-use Moose::Role;
+use Moo::Role;
 with 'Stream::Moose::In';
 
 sub read_chunk($$) {

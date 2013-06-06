@@ -4,8 +4,8 @@ package Stream::RoundRobin;
 
 use Moo;
 
-use autodie qw(:all);
 use IPC::System::Simple;
+use autodie qw(open close rename system sysseek);
 use Fcntl qw( SEEK_SET SEEK_CUR SEEK_END );
 use IO::Handle;
 use List::Util qw(sum);
@@ -116,11 +116,9 @@ sub _mkdir_unless_exists {
     my $self = shift;
     my ($dir) = @_;
     return if -d $dir;
-    {
-        no autodie;
-        unless (mkdir $dir) {
-            die "mkdir failed: $!" unless -d $dir;
-        }
+
+    unless (mkdir $dir) {
+        die "mkdir failed: $!" unless -d $dir;
     }
 }
 
