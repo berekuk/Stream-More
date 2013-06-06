@@ -81,6 +81,7 @@ sub _build__coros {
     my @coros;
     my $in = $self->_in_channel;
     my $out = $self->_out_channel;
+    $self->alive_threads(0);
     for my $i (1 .. $self->threads) {
         my $filter = $self->filter->();
         push @coros, Coro::async(sub {
@@ -101,14 +102,15 @@ sub _build__coros {
                 }
                 1;
             };
+            $self->alive_threads( $self->alive_threads - 1 );
             unless ( $ok ) {
                 my $err = $@;
 
-                $self->alive_threads( $self->alive_threads - 1 );
                 if ( !$self->alive_threads && $in->size ) {
                     $in->get while ( $in->size );
                     # empty "in" queue, because we don't have enough alive workers to cope with it
                 }
+
                 $out->put({ exception => $err })
             }
         });
@@ -160,10 +162,12 @@ sub commit {
     my $self = shift;
     return unless $self->_has_coros;
 
-    $self->_in_channel->put({ action => 'commit' }) for 1 .. $self->alive_threads;
+    for ( 1 .. $self->alive_threads ) {
+        last unless $self->alive_threads;
+        $self->_in_channel->put({ action => 'commit' });
+    }
     for ( @{ $self->_coros } ) {
         $_->join;
-        $self->alive_threads( $self->alive_threads - 1 );
     }
     my @result = $self->_read_all;
 
