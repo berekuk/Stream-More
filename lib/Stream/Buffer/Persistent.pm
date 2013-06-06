@@ -1,13 +1,14 @@
 package Stream::Buffer::Persistent;
 
-use namespace::autoclean;
-use Moose;
+use Moo;
 with 'Stream::Buffer::Role';
-
-use Params::Validate qw(:all);
 
 use Yandex::Logger;
 use Yandex::Persistent;
+
+use Types::Standard qw(Int);
+
+use namespace::clean;
 
 =head1 DESCRIPTION
 
@@ -56,14 +57,14 @@ has 'dir' => (
 
 has 'max_chunk_size' => (
     is => 'ro',
-    isa => 'Int',
-    default => 1000,
+    isa => Int,
+    default => sub { 1000 },
 );
 
 has 'max_chunk_count' => (
     is => 'ro',
-    isa => 'Int',
-    default => 100,
+    isa => Int,
+    default => sub { 100 },
 );
 
 sub BUILD {
@@ -221,4 +222,4 @@ C<bench/buffer.pl> in stream-more repository for the benchmarks.
 
 =cut
 
-__PACKAGE__->meta->make_immutable;
+1;

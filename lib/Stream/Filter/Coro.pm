@@ -12,33 +12,36 @@ package Stream::Filter::Coro;
 
 =cut
 
-use namespace::autoclean;
-use Moose;
+use Moo;
 with 'Stream::Moose::Filter::Easy';
 
 use Try::Tiny;
+use Types::Standard qw(Int CodeRef Object);
+use Scalar::Util qw(blessed);
+
+use namespace::clean;
 
 has 'threads' => (
     is => 'ro',
-    isa => 'Int',
+    isa => Int,
     required => 1,
 );
 
 has 'alive_threads' => (
     is => 'rw',
-    isa => 'Int',
-    default => 0,
+    isa => Int,
+    default => sub { 0 },
 );
 
 has 'chunk_size' => (
     is => 'ro',
-    isa => 'Int',
-    default => 1,
+    isa => Int,
+    default => sub { 1 },
 );
 
 has 'filter' => (
     is => 'rw',
-    isa => 'CodeRef|Object',
+    isa => CodeRef|Object,
 );
 
 sub BUILD {
@@ -52,14 +55,8 @@ sub BUILD {
     }
 }
 
-has '_coros' => (
-    is => 'ro',
-    lazy_build => 1,
-);
-
 has '_in_channel' => (
-    is => 'ro',
-    lazy => 1,
+    is => 'lazy',
     default => sub {
         Coro::Channel->new(1);
     },
@@ -67,14 +64,18 @@ has '_in_channel' => (
 );
 
 has '_out_channel' => (
-    is => 'ro',
-    lazy => 1,
+    is => 'lazy',
     default => sub {
         Coro::Channel->new; # TODO - maxsize?
     },
     clearer => '_clear_out',
 );
 
+has '_coros' => (
+    is => 'lazy',
+    predicate => 1,
+    clearer => 1,
+);
 sub _build__coros {
     my $self = shift;
     my @coros;
@@ -186,4 +187,4 @@ sub DEMOLISH {
 
 =cut
 
-__PACKAGE__->meta->make_immutable;
+1;
