@@ -480,8 +480,8 @@ sub description {
 
 use Stream::Moose::Role::AutoOwned;
 with
-    'Stream::Moose::Storage',
     'Stream::Moose::Out::Easy',
+    'Stream::Moose::Storage',
     'Stream::Moose::Out::ReadOnly',
     'Stream::Moose::Storage::ClientList',
     'Stream::Moose::Storage::AutoregisterClients',

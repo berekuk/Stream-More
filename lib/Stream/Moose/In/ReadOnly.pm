@@ -7,7 +7,7 @@ with 'Stream::Moose::Role::ReadOnly';
 
 use namespace::clean;
 
-before [qw( commit )] => sub {
+before qw( commit ) => sub {
     shift->check_read_only;
 };
 

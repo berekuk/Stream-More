@@ -5,7 +5,10 @@ package Stream::Moose::Out::Easy;
 use Moo::Role;
 with 'Stream::Moose::Out';
 
-sub write_chunk($$;$) {
+use Carp qw(confess);
+use namespace::clean;
+
+sub write_chunk {
     my ($self, $chunk, @extra) = @_;
     confess "write_chunk method expects arrayref, you specified: '$chunk'" unless ref($chunk) eq 'ARRAY'; # can chunks be blessed into something?
     for my $item (@$chunk) {
