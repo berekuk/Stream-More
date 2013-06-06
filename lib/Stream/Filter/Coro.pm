@@ -161,7 +161,10 @@ sub commit {
     my $self = shift;
     return unless $self->_has_coros;
 
-    $self->_in_channel->put({ action => 'commit' }) for 1 .. $self->alive_threads;
+    for ( 1 .. $self->alive_threads ) {
+        last unless $self->alive_threads;
+        $self->_in_channel->put({ action => 'commit' });
+    }
     for ( @{ $self->_coros } ) {
         $_->join;
     }
