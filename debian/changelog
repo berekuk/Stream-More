@@ -1,3 +1,9 @@
+libstream-more-perl (0.15.0) unstable; urgency=low
+
+  * rewrite everything in Moo
+
+ -- Vyacheslav Matjukhin (No comments) <mmcleric@yandex-team.ru>  Thu, 06 Jun 2013 20:43:03 +0400
+
 libstream-more-perl (0.14.12) unstable; urgency=low
 
   * fix Coro::Filter locking
