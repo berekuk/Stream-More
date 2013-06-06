@@ -6,6 +6,8 @@ package Stream::Moose::Role::Owned;
 # We could refactor it into some overly-abstract Role::Owned role in the future.
 # (see also Stream::Moose::Role::ReadOnly)
 
+use UNIVERSAL::DOES;
+
 use Moo::Role;
 use Types::Standard qw( Int Str );
 use namespace::clean;
@@ -18,9 +20,6 @@ around DOES => sub {
         return 1;
     }
 
-    unless ($self->can('DOES')) {
-        $orig = 'isa';
-    }
     return $self->$orig(@_);
 };
 

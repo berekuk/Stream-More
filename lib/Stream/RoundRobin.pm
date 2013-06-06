@@ -3,7 +3,6 @@ package Stream::RoundRobin;
 # ABSTRACT: local RoundRobin-style string storage
 
 use Moo;
-use MooseX::Params::Validate;
 
 use autodie qw(:all);
 use IPC::System::Simple;

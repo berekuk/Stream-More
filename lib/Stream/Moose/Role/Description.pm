@@ -2,10 +2,20 @@ package Stream::Moose::Role::Description;
 
 # ABSTRACT: role for streams which can report their detailed descriptions
 
-use Moose::Role;
+use UNIVERSAL::DOES;
 
-use Class::DOES::Moose;
-extra_does 'Stream::Role::Description';
+use Moo::Role;
+
+around DOES => sub {
+    my ($orig, $self) = (shift, shift);
+    my ($class) = @_;
+
+    if ($class eq 'Stream::Role::Description') {
+        return 1;
+    }
+
+    return $self->$orig(@_);
+};
 
 =head1 METHODS
 
