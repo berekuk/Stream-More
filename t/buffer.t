@@ -289,7 +289,7 @@ sub commit_chunk :Tests {
     my $mq = $self->_buffer($in, { max_chunk_size => 10 });
     my @items = map { $mq->read } (1..10);
     $mq->commit( [$_->[0]] ) for ( @items[1..5] );
-    my @items = map { $mq->read } (1..5);
+    @items = map { $mq->read } (1..5);
 
     is( $commit_count, 2, "commiting by chunk");
     is_deeply( $read_counts, [10,5], "read by chunks");

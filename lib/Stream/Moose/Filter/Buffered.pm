@@ -6,7 +6,7 @@ package Stream::Moose::Filter::Buffered;
 
     package MyFilter;
 
-    use Moose;
+    use Moo;
     with 'Stream::Moose::Filter::Buffered';
 
     sub flush {
@@ -18,13 +18,15 @@ package Stream::Moose::Filter::Buffered;
 
 =cut
 
-use Moose::Role;
+use Moo::Role;
 with 'Stream::Moose::Filter';
+
+use Types::Standard qw(Int);
 
 has 'buffer_size' => (
     is => 'ro',
-    isa => 'Int',
-    default => 100,
+    isa => Int,
+    default => sub { 100 },
 );
 
 has '_buffer' => (

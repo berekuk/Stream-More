@@ -6,23 +6,30 @@ package Stream::Moose::Role::Owned;
 # We could refactor it into some overly-abstract Role::Owned role in the future.
 # (see also Stream::Moose::Role::ReadOnly)
 
-use Moose::Role;
+use UNIVERSAL::DOES;
 
-use Class::DOES::Moose;
-extra_does 'Stream::Role::Owned';
+use Moo::Role;
+use Types::Standard qw( Int Str );
+use namespace::clean;
+
+around DOES => sub {
+    my ($orig, $self) = (shift, shift);
+    my ($class) = @_;
+
+    return 1 if $class eq 'Stream::Role::Owned';
+    return $self->$orig(@_);
+};
 
 has 'owner' => (
-    is => 'ro',
-    isa => 'Str',
-    lazy_build => 1,
-    required => 1,
+    is => 'lazy',
+# TODO, commented due to issue https://rt.cpan.org/Ticket/Display.html?id=85895
+#    isa => Str,
 );
 
 has 'owner_uid' => (
-    is => 'ro',
-    isa => 'Int',
-    lazy_build => 1,
-    required => 1,
+    is => 'lazy',
+# TODO, commented due to issue https://rt.cpan.org/Ticket/Display.html?id=85895
+#    isa => Int,
 );
 
 1;

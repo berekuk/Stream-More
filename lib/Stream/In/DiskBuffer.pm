@@ -9,8 +9,6 @@ use parent qw(
     Stream::In
 );
 
-use namespace::autoclean;
-
 use Params::Validate qw(:all);
 
 use Carp;
@@ -21,6 +19,8 @@ use autodie qw(unlink);
 use Stream::In::DiskBuffer::Chunk;
 
 use Scalar::Util qw(blessed);
+
+use namespace::clean;
 
 =head1 SYNOPSIS
 

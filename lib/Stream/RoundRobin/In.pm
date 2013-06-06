@@ -2,10 +2,11 @@ package Stream::RoundRobin::In;
 
 # ABSTRACT: input stream for Stream::RoundRobin storage
 
-use namespace::autoclean;
-use Moose;
+use Moo;
+use Types::Standard qw( Int Bool Str );
+use Type::Utils qw(class_type);
 
-use autodie qw( open seek ); # can't import everything - read messes with stream's read method
+use autodie qw( open seek ); # can't import everything - read messes with stream's read method; also, importing everything is *slow*
 use Fcntl qw( SEEK_SET SEEK_CUR SEEK_END );
 
 use Yandex::Persistent;
@@ -13,14 +14,9 @@ use Yandex::Lockf;
 
 use Stream::RoundRobin::Types qw(:all);
 
-sub isa {
-    return 1 if $_[1] eq __PACKAGE__;
-    $_[0]->next::method if $_[0]->next::can;
-} # ugly hack
-
 has 'storage' => (
     is => 'ro',
-    isa => 'Stream::RoundRobin',
+    isa => class_type { class => 'Stream::RoundRobin' },
     required => 1,
 );
 
@@ -32,7 +28,7 @@ has 'name' => (
 
 has 'dir' => (
     is => 'ro',
-    isa => 'Str',
+    isa => Str,
     lazy => 1,
     default => sub {
         my $self = shift;
@@ -42,8 +38,8 @@ has 'dir' => (
 
 
 has 'lock' => (
-    is => 'ro',
-    lazy_build => 1,
+    is => 'lazy',
+    clearer => 1,
 );
 
 sub _build_lock {
@@ -53,14 +49,16 @@ sub _build_lock {
 
 has 'position' => (
     is => 'rw',
-    isa => 'Int',
-    lazy_build => 1,
+    isa => Int,
+    lazy => 1,
+    clearer => 1,
+    builder => 1,
 );
 
 has 'commited' => (
     is => 'rw',
-    isa => 'Bool',
-    default => 1,
+    isa => Bool,
+    default => sub { 1 },
 );
 
 sub _build_position {
@@ -110,7 +108,7 @@ sub read_chunk {
 
     while (@buffer < $length) {
         if ($cur == $write_position) {
-            confess "Unexpected incomplete line $incomplete" if defined $incomplete;
+            die "Unexpected incomplete line $incomplete" if defined $incomplete;
             # ok, nothing more to read
             last;
         }
@@ -125,11 +123,11 @@ sub read_chunk {
         }
         else {
             if ($cur == $data_size) {
-                confess "Two incomplete lines in a row" if defined $incomplete;
+                die "Two incomplete lines in a row" if defined $incomplete;
                 $incomplete = $line;
             }
             else {
-                confess "Incomplete line"; # this is pretty much impossible if file has the correct size
+                die "Incomplete line"; # this is pretty much impossible if file has the correct size
             }
         }
 
@@ -142,7 +140,7 @@ sub read_chunk {
             }
         }
         elsif ($cur > $write_position) {
-            confess "Read crossed write position, something's wrong";
+            die "Read crossed write position, something's wrong";
         }
     }
 
@@ -178,10 +176,11 @@ sub lag {
     return $lag;
 }
 
+use Stream::Moose::Role::AutoOwned;
 with 'Stream::Moose::In::Chunked',
     'Stream::Moose::In::ReadOnly', # provides check_read_only and calls it before write/write_chunk/commit
     'Stream::Moose::In::Lag', # lag method
-    'Stream::Moose::Role::AutoOwned' => { file_method => 'dir' }, # provides owner/owner_uid
+    AutoOwned(file_method => 'dir'), # provides owner/owner_uid
 ;
 
-__PACKAGE__->meta->make_immutable;
+1;

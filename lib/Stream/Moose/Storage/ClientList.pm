@@ -2,11 +2,18 @@ package Stream::Moose::Storage::ClientList;
 
 # ABSTRACT: role for storages with named managed clients
 
-use Moose::Role;
+use UNIVERSAL::DOES;
+
+use Moo::Role;
 with 'Stream::Moose::Storage';
 
-use Class::DOES::Moose;
-extra_does 'Stream::Storage::Role::ClientList';
+around DOES => sub {
+    my ($orig, $self) = (shift, shift);
+    my ($class) = @_;
+
+    return 1 if $class eq 'Stream::Storage::Role::ClientList';
+    return $self->$orig(@_);
+};
 
 requires
     'client_names',

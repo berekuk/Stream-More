@@ -8,7 +8,6 @@ use warnings;
 use parent qw(Exporter);
 our @EXPORT = qw( check_cross );
 
-use Params::Validate;
 use Carp qw(confess);
 
 =head1 FUNCTIONS
@@ -21,12 +20,7 @@ Check that any of positions cross the interval from left to right.
 
 =cut
 sub check_cross {
-    my $params = validate(@_, {
-        left => 1,
-        right => 1,
-        size => 1,
-        positions => 1, # name -> int value
-    });
+    my $params = { @_ };
     my ($left, $right, $size, $positions) = @$params{qw/ left right size positions /};
 
     if ($right > $size) {

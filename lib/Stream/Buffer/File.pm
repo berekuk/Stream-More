@@ -2,18 +2,19 @@ package Stream::Buffer::File;
 
 # ABSTRACT: ulitily class to store uncommited data in a local file buffers
 
-use namespace::autoclean;
 
-use Moose;
+use Moo;
 with 'Stream::Buffer::Role';
 
-use Params::Validate qw(:all);
+use Types::Standard qw(Int);
 
 use Yandex::Logger;
 use Yandex::X qw(xopen xclose xunlink);
 use Yandex::Lockf 3.0.0;
 
 use Stream::File;
+
+use namespace::clean;
 
 =head1 DESCRIPTION
 
@@ -30,14 +31,13 @@ has 'dir' => (
 
 has 'max_chunk_size' => (
     is => 'ro',
-    isa => 'Int',
+    isa => Int,
     default => 1000,
 );
 
 has 'max_log_size' => (
-    is => 'ro',
-    isa => 'Int',
-    lazy => 1,
+    is => 'lazy',
+    isa => Int,
     default => sub {
         my $self = shift;
         return $self->max_chunk_size * 10;
@@ -46,8 +46,8 @@ has 'max_log_size' => (
 
 has 'max_chunk_count' => (
     is => 'ro',
-    isa => 'Int',
-    default => 100,
+    isa => Int,
+    default => sub { 100 },
 );
 
 sub BUILD {
@@ -83,7 +83,7 @@ sub _find_buffer {
 sub _dump_file {
     my $self = shift;
     my ($buffer, $state, $stream_file) = @_;
-    
+
     my $file = $stream_file->file;
     my $fh = xopen '<', $file;
     my $log_size = 0;
@@ -107,7 +107,7 @@ sub _dump_file {
 
     @$buffer = map { [ $_ => $state->{$_} ] } sort {$a <=> $b} keys %$state;
     xclose $fh;
-    return $log_size; 
+    return $log_size;
 };
 
 sub _create_buffer {
@@ -126,7 +126,7 @@ sub _create_buffer {
                 next;
             }
             DEBUG "$file: created and locked";
-            
+
             $stream_file = Stream::File->new($file, { lock => 0 });
             $stream_file->_open;
             last;
@@ -151,7 +151,7 @@ sub _flush_buffer {
 
     my $old_lock = $self->{_lockf};
     my $old_file = $self->{_stream_file}->file;
-        
+
     DEBUG "Log size exceeded, creating new log file";
     my ($file, $lockf);
     while () {
@@ -164,14 +164,14 @@ sub _flush_buffer {
         DEBUG "$file: created and locked";
         last;
     }
-    
+
     $self->{_lockf} = $lockf;
     $self->{_stream_file} = Stream::File->new($file, { lock => 0 });
     $self->{_stream_file}->_open;
 
     my $state = $self->{_state};
     my @log_data = map { [ $_ => $state->{$_} ] } sort {$a <=> $b} keys %$state;
-    
+
     my $stream_file = $self->{_stream_file};
 
     for my $item (@log_data) {
@@ -256,7 +256,7 @@ sub delete {
     my ($ids) = @_;
 
     $self->_flush_buffer if scalar(@$ids) + $self->{_log_size} > $self->max_log_size;
-    
+
     my $state = $self->{_state};
     my $stream_file = $self->{_stream_file};
     for my $id (@$ids) {
@@ -265,7 +265,7 @@ sub delete {
         $stream_file->write("$id\t-\tundef\n");
     }
     $stream_file->commit();
-    
+
     $self->{_items_size} -= @$ids;
     $self->{_log_size} += @$ids;
 }
@@ -277,4 +277,4 @@ sub lag {
     return $lag;
 }
 
-__PACKAGE__->meta->make_immutable;
+1;

@@ -3,6 +3,8 @@
 use strict;
 use warnings;
 
+BEGIN { $ENV{PERL_STRICTURES_EXTRA} = 0 }
+
 use Test::More 0.95;
 
 use lib 'lib';
@@ -17,7 +19,7 @@ sub coverage_class {
     return if /^Stream::Test/;
     return if /^Stream::Queue::BigChunk/;
 
-    return 'Moose' if /^Stream::RoundRobin/
+    return 'Moose' if (/^Stream::RoundRobin/ and not /RoundRobin::Types/)
         or /^Stream::Moose/
         or /^Stream::Queue/
         or /^Stream::Concat/
@@ -43,7 +45,7 @@ for my $module (all_modules()) {
     pod_coverage_ok($module, {
         coverage_class => "Pod::Coverage::$class",
         %$options,
-        also_private => [ qr/^BUILD|DOES|DEMOLISH$/ ],
+        also_private => [ qr/^BUILD|DOES|DEMOLISH|make_variant$/ ],
     });
 }
 

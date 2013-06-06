@@ -2,17 +2,18 @@ package Stream::Moose::Storage::AutoregisterClients;
 
 # ABSTRACT: role for storages supporting named clients which want to register them automatically
 
-use namespace::autoclean;
-
-use Moose::Role;
+use Moo::Role;
 with 'Stream::Moose::Storage::ClientList';
 
+use Types::Standard qw(Bool);
 use Carp;
+
+use namespace::clean;
 
 has 'autoregister' => (
     is => 'ro',
-    isa => 'Bool',
-    default => 1, # TODO - set via parameterized role?
+    isa => Bool,
+    default => sub { 1 }, # TODO - set via parameterized role?
     documentation => 'If true, automatically register client at first C<in()> call',
 );
 

@@ -6,24 +6,18 @@ package Stream::Moose::FakeIsa;
 # remember that you have to add the following code to the class consuming this role:
 # sub isa { $_[0]->next::method if $_[0]->next::can }
 
-use MooseX::Role::Parameterized;
+use Package::Variant
+    importing => ['Moo::Role'],
+    subs => [qw( around )];
 
-parameter 'extra' => (
-    is => 'ro',
-    isa => 'ArrayRef[Str]',
-    required => 1,
-);
-
-use Class::C3;
-
-role {
-    my $p = shift;
+sub make_variant {
+    my ($class, $target_package, @extra) = @_;
 
     around 'isa' => sub {
         my ($orig, $self) = (shift, shift);
-        my $class = $_[0];
-        for my $extra_isa (@{ $p->extra }) {
-            return 1 if $class eq $extra_isa;
+        my $isa = $_[0];
+        for my $extra_isa (@extra) {
+            return 1 if $isa eq $extra_isa;
         }
         return $self->$orig(@_);
     };

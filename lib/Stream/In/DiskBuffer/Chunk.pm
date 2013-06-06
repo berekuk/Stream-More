@@ -14,8 +14,7 @@ Creating an instance of this class doesn't create any files. You have to call C<
 
 =cut
 
-use namespace::autoclean;
-use Moose;
+use Moo;
 with
     'Stream::Moose::In',
     'Stream::Moose::In::Lag',
@@ -34,25 +33,31 @@ use Stream::Formatter::LinedStorable;
 use Stream::Formatter::JSON;
 use Stream::File::Cursor;
 use Stream::File;
-use Params::Validate qw(:all);
 use Try::Tiny;
+
+use Carp qw(confess);
+
+use Type::Params qw(compile);
+use Types::Standard qw(Str Int Bool ArrayRef);
+
+use namespace::clean;
 
 has 'dir' => (
     is => 'ro',
-    isa => 'Str',
+    isa => Str,
     required => 1,
 );
 
 has 'id' => (
     is => 'ro',
-    isa => 'Int',
+    isa => Int,
     required => 1,
 );
 
 has 'read_only' => (
     is => 'ro',
-    isa => 'Bool',
-    default => 0,
+    isa => Bool,
+    default => sub { 0 },
 );
 
 #FIXME: move formatters to catalog!
@@ -62,11 +67,10 @@ my %format2wrapper = (
 );
 has 'format' => (
     is => 'ro',
-    isa => 'Str', # FIXME - Stream::Formatter? coerce?
+    isa => Str, # FIXME - Stream::Formatter? coerce?
 );
 has 'format_obj' => (
-    is => 'ro',
-    lazy => 1,
+    is => 'lazy',
     default => sub {
         my $self = shift;
         my $format = $self->format;
@@ -79,8 +83,7 @@ has 'format_obj' => (
 );
 
 has '_lock' => (
-    is => 'ro',
-    lazy => 1,
+    is => 'lazy',
     default => sub {
         my $self = shift;
         return if $self->read_only;
@@ -103,28 +106,31 @@ Create the new chunk and fill it with given arrayref of data atomically.
 Exception will happen if chunk already exists.
 
 =cut
-my $uid = 0; 
-sub create {
-    my $self = shift;
-    my ($data) = validate_pos(@_, { type => ARRAYREF });
+{
+    my $uid = 0;
+    my $_check = compile(ArrayRef);
+    sub create {
+        my $self = shift;
+        my ($data) = $_check->(@_);
 
-    my $file = $self->_prefix.".chunk";
+        my $file = $self->_prefix.".chunk";
 
-    # we can't use File::Temp here - it creates files with 600 permissions which breaks read-only mode
-    my $new_file = $self->_prefix.".tmp.$$.".time.".".($uid++);
+        # we can't use File::Temp here - it creates files with 600 permissions which breaks read-only mode
+        my $new_file = $self->_prefix.".tmp.$$.".time.".".($uid++);
 
-    if ($self->_in) {
-        die "Can't recreate chunk, $self is already initialized";
+        if ($self->_in) {
+            die "Can't recreate chunk, $self is already initialized";
+        }
+        if (-e $file) {
+            die "Can't recreate chunk, $file already exists";
+        }
+        my $storage = Stream::File->new($new_file);
+        $storage = $self->format_obj->wrap($storage) if $self->format_obj;
+        $storage->write_chunk($data);
+        $storage->commit;
+
+        rename $new_file => $file; # autodie takes care of errors
     }
-    if (-e $file) {
-        die "Can't recreate chunk, $file already exists";
-    }
-    my $storage = Stream::File->new($new_file);
-    $storage = $self->format_obj->wrap($storage) if $self->format_obj;
-    $storage->write_chunk($data);
-    $storage->commit;
-
-    rename $new_file => $file; # autodie takes care of errors
 }
 
 =item B<< load($dir, $id) >>
@@ -229,4 +235,4 @@ sub remove {
 
 =cut
 
-__PACKAGE__->meta->make_immutable;
+1;

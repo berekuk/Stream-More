@@ -2,8 +2,11 @@ package Stream::Moose::In::Chunked;
 
 # ABSTRACT: role for output streams which want to implement read() with read_chunk()
 
-use Moose::Role;
+use Moo::Role;
 with 'Stream::Moose::In';
+
+use Carp qw(confess);
+use namespace::clean;
 
 sub read {
     my $self = shift;

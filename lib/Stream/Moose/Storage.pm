@@ -2,11 +2,11 @@ package Stream::Moose::Storage;
 
 # ABSTRACT: role for stream storage classes
 
-use Moose::Role;
-with
-    'Stream::Moose::Out',
-    'Stream::Moose::FakeIsa' => { extra => ['Stream::Storage'] },
-;
+use Moo::Role;
+use Stream::Moose::FakeIsa;
+with 'Stream::Moose::Out', FakeIsa('Stream::Storage');
+
+use namespace::clean;
 
 requires 'in';
 

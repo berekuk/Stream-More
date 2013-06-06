@@ -8,8 +8,13 @@ Moose-based output streams should implement this role.
 
 =cut
 
-use Moose::Role;
-with 'Stream::Moose::FakeIsa' => { extra => ['Stream::Out'] };
+use UNIVERSAL::DOES;
+
+use Moo::Role;
+use Stream::Moose::FakeIsa;
+with FakeIsa('Stream::Out');
+
+use namespace::clean;
 
 requires 'write', 'write_chunk', 'commit';
 

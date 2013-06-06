@@ -2,11 +2,13 @@ package Stream::Moose::Out::ReadOnly;
 
 # ABSTRACT: specialization of ::Role::ReadOnly for output streams
 
-use Moose::Role;
+use Moo::Role;
 with 'Stream::Moose::Role::ReadOnly';
 
-before [qw( write write_chunk commit )] => sub {
-    shift->check_read_only;
-};
+for (qw( write write_chunk commit )) {
+    before $_ => sub {
+        shift->check_read_only;
+    };
+}
 
 1;

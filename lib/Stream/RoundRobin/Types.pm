@@ -1,17 +1,21 @@
 package Stream::RoundRobin::Types;
 
-# ABSTRACT: moose types collection for Stream::RoundRobin
+# ABSTRACT: moo-like types collection for Stream::RoundRobin
 
 use strict;
 use warnings;
 
-use MooseX::Types
-    -declare => [qw( ClientName )];
+use Type::Library
+    -base,
+    -declare => qw( ClientName );
+use Type::Utils;
+use Types::Standard qw( Str );
 
-use MooseX::Types::Moose qw( Str );
-
-subtype ClientName,
+declare ClientName,
     as Str,
-    where { /^[\w\.-]+$/ };
+    where {
+        /^[\w\.-]+$/
+    },
+    message {"Invalid client name '$_'" };
 
 1;
