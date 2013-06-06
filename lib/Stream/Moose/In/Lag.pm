@@ -2,11 +2,20 @@ package Stream::Moose::In::Lag;
 
 # ABSTRACT: lag role for input streams
 
-use Moose::Role;
+use UNIVERSAL::DOES;
+
+use Moo::Role;
 with 'Stream::Moose::In';
 
-use Class::DOES::Moose;
-extra_does 'Stream::In::Role::Lag';
+use namespace::clean;
+
+around DOES => sub {
+    my ($orig, $self) = (shift, shift);
+    my ($class) = @_;
+
+    return 1 if $class eq 'Stream::In::Role::Lag';
+    return $self->$orig(@_);
+};
 
 requires 'lag';
 

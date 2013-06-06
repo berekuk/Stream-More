@@ -16,10 +16,7 @@ around DOES => sub {
     my ($orig, $self) = (shift, shift);
     my ($class) = @_;
 
-    if ($class eq 'Stream::Role::Owned') {
-        return 1;
-    }
-
+    return 1 if $class eq 'Stream::Role::Owned';
     return $self->$orig(@_);
 };
 
