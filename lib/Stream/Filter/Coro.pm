@@ -164,7 +164,6 @@ sub commit {
     $self->_in_channel->put({ action => 'commit' }) for 1 .. $self->alive_threads;
     for ( @{ $self->_coros } ) {
         $_->join;
-        $self->alive_threads( $self->alive_threads - 1 );
     }
     my @result = $self->_read_all;
 
