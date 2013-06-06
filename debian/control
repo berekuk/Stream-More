@@ -9,6 +9,6 @@ XB-Homepage: http://search.cpan.org/dist/Stream/
 
 Package: libstream-more-perl
 Architecture: all
-Depends: ${perl:Depends}
+Depends: ${perl:Depends}, librole-tiny-perl (>= 1.002005-1)
 Description: more of Stream-compatible modules
  All Stream modules which aren't needed in core lives here by now.
